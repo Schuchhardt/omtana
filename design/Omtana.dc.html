@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" href="assets/omtana-symbol-black.svg">
+<style>
+  html, body { margin:0; padding:0; background:#F6F1E9; }
+  * { box-sizing: border-box; }
+  a { color:#B4643C; text-decoration:none; }
+  a:hover { color:#8E4A29; }
+  textarea, input, button, select { font-family: inherit; }
+  @keyframes omBreathe {
+    0%, 100% { transform: scale(0.82); opacity:.55; }
+    40% { transform: scale(1.12); opacity:.9; }
+    55% { transform: scale(1.12); opacity:.9; }
+  }
+  @keyframes omBar { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+  @keyframes omFade { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:none; } }
+</style>
+</helmet>
+
+<div style="font-family:'Jost',system-ui,sans-serif;background:#F6F1E9;color:#241F1A;min-height:100vh;-webkit-font-smoothing:antialiased">
+
+  <div style="position:sticky;top:0;z-index:20;background:rgba(246,241,233,.93);backdrop-filter:blur(12px);border-bottom:1px solid #E4DACA">
+    <div style="max-width:1180px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div onClick="{{ goLanding }}" style="display:flex;align-items:center;gap:11px;margin-right:auto;cursor:pointer">
+        <img src="assets/omtana-symbol-black.svg" alt="" style="height:26px;width:26px;display:block" />
+        <img src="assets/omtana-wordmark-black.svg" alt="Omtana" style="height:19px;width:auto;display:block" />
+      </div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">
+        <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="11">
+          <button onClick="{{ tab.go }}" style="{{ tab.style }}">{{ tab.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;border-left:1px solid #E4DACA;padding-left:14px">
+        <sc-for list="{{ langs }}" as="l" hint-placeholder-count="3">
+          <button onClick="{{ l.go }}" style="{{ l.style }}">{{ l.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ isLanding }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Landing">
+      <div style="max-width:1180px;margin:0 auto;padding:0 24px">
+        <div style="padding:92px 0 76px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:56px;align-items:center">
+          <div>
+            <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:24px">Meditaciones generadas</div>
+            <h1 style="font-size:clamp(38px,5vw,62px);line-height:1.06;font-weight:400;letter-spacing:-0.02em;margin:0 0 24px;text-wrap:pretty">No busques la meditación que más se acerque. Dinos qué necesitas hoy.</h1>
+            <p style="font-size:19px;line-height:1.6;color:#6B6157;max-width:46ch;margin:0 0 36px;text-wrap:pretty">Omtana arma la meditación alrededor de tu caso: guion, voz y música. Cada sesión abre con respiración, porque es lo que te lleva antes al estado que buscas.</p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+              <button onClick="{{ goSignup }}" style="background:#241F1A;color:#F6F1E9;border:none;border-radius:999px;padding:15px 30px;font-size:16px;cursor:pointer">Crear cuenta gratis</button>
+              <button onClick="{{ goPlayer }}" style="background:transparent;color:#241F1A;border:1px solid #D5C9B6;border-radius:999px;padding:15px 26px;font-size:16px;cursor:pointer">Escuchar una de 5 minutos</button>
+            </div>
+            <div style="font-size:14px;color:#9A8F81;margin-top:18px">Sin tarjeta. El catálogo público es gratis siempre.</div>
+          </div>
+          <div style="position:relative;aspect-ratio:1;border-radius:50%;background:#FFFDF9;border:1px solid #E7DECF;display:flex;align-items:center;justify-content:center;overflow:hidden">
+            <div style="position:absolute;width:74%;height:74%;border-radius:50%;background:radial-gradient(circle,#EBD6C6 0%,#F6E9DD 55%,rgba(246,233,221,0) 72%);animation:omBreathe 12s ease-in-out infinite"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:3px;height:70px;width:62%">
+              <sc-for list="{{ heroBars }}" as="b" hint-placeholder-count="44">
+                <div style="{{ b.style }}"></div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:#E4DACA;border:1px solid #E4DACA;border-radius:4px;overflow:hidden">
+          <div style="background:#FFFDF9;padding:32px 28px">
+            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#B4643C;margin-bottom:14px">01 — Intención</div>
+            <p style="margin:0;font-size:16px;line-height:1.6;color:#4A4239">Eliges de un banco curado de intenciones, o escribes la tuya. Nunca partes de una pantalla en blanco.</p>
+          </div>
+          <div style="background:#FFFDF9;padding:32px 28px">
+            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#B4643C;margin-bottom:14px">02 — Personalización</div>
+            <p style="margin:0;font-size:16px;line-height:1.6;color:#4A4239">Sobre esa base se intercalan tramos escritos para tu contexto. El resto ya está listo, así que la espera es corta.</p>
+          </div>
+          <div style="background:#FFFDF9;padding:32px 28px">
+            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#B4643C;margin-bottom:14px">03 — Voz</div>
+            <p style="margin:0;font-size:16px;line-height:1.6;color:#4A4239">Eliges quién te habla. Acento, género y tono. Cada voz es un personaje consistente, no una casilla de configuración.</p>
+          </div>
+        </div>
+
+        <div style="margin-top:96px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:48px;align-items:center">
+          <div>
+            <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:18px">La respiración primero</div>
+            <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:400;letter-spacing:-0.02em;margin:0 0 18px;text-wrap:pretty">Cada sesión abre con uno o dos ejercicios de respiración</h2>
+            <p style="font-size:17px;line-height:1.65;color:#6B6157;margin:0;max-width:50ch">No es un adorno de entrada. Hay literatura que muestra que ciertos patrones respiratorios llevan al cuerpo a un estado de relajación más rápido que la instrucción verbal sola. Por eso el patrón viene antes del guion, y no al revés.</p>
+          </div>
+          <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:34px 30px">
+            <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:22px">Anatomía de una sesión de 15 minutos</div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <sc-for list="{{ anatomy }}" as="a" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:14px">
+                  <div style="{{ a.chipStyle }}"></div>
+                  <div style="margin-right:auto;font-size:16px">{{ a.label }}</div>
+                  <div style="font-size:14px;color:#9A8F81">{{ a.min }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="height:1px;background:#EDE4D6;margin:22px 0"></div>
+            <div style="font-size:14px;color:#9A8F81;line-height:1.55">Los bloques claros ya existen. Solo el punto de color se escribe para ti, y por eso la generación toma menos de un minuto.</div>
+          </div>
+        </div>
+
+        <div style="margin-top:96px">
+          <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Precio</div>
+          <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:400;letter-spacing:-0.02em;margin:0 0 12px">Personalizar cuesta, así que se cobra</h2>
+          <p style="font-size:17px;color:#6B6157;margin:0 0 36px;max-width:54ch;line-height:1.6">Escuchar el catálogo es gratis. Generar una meditación consume tokens y síntesis de voz, y el precio lo refleja sin rodeos.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
+            <sc-for list="{{ plans }}" as="p" hint-placeholder-count="3">
+              <div style="{{ p.cardStyle }}">
+                <div style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#8E8376;margin-bottom:16px">{{ p.tag }}</div>
+                <div style="font-size:36px;font-weight:300;letter-spacing:-0.02em">{{ p.price }}</div>
+                <div style="font-size:14px;color:#8E8376;margin-bottom:24px">{{ p.per }}</div>
+                <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+                  <sc-for list="{{ p.features }}" as="f" hint-placeholder-count="3">
+                    <div style="display:flex;gap:10px;font-size:15px;line-height:1.5;color:#4A4239">
+                      <span style="color:#B4643C">—</span><span>{{ f.text }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <button onClick="{{ p.go }}" style="{{ p.btnStyle }}">{{ p.cta }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="margin-top:96px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:48px">
+          <div>
+            <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Preguntas</div>
+            <h2 style="font-size:clamp(26px,3.4vw,36px);font-weight:400;letter-spacing:-0.02em;margin:0;text-wrap:pretty">Lo que nos preguntan antes de entrar</h2>
+          </div>
+          <div>
+            <sc-for list="{{ faqs }}" as="q" hint-placeholder-count="5">
+              <div style="{{ q.wrapStyle }}">
+                <button onClick="{{ q.toggle }}" style="width:100%;display:flex;align-items:center;gap:16px;background:transparent;border:none;padding:20px 0;cursor:pointer;text-align:left;color:#241F1A">
+                  <span style="font-size:17px;margin-right:auto">{{ q.q }}</span>
+                  <span style="font-size:18px;color:#9A8F81;flex:none">{{ q.sign }}</span>
+                </button>
+                <sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:16px;line-height:1.65;color:#6B6157;padding:0 40px 22px 0;max-width:56ch">{{ q.a }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="margin-top:96px;background:#241F1A;border-radius:4px;padding:clamp(36px,5vw,64px);display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:40px;align-items:center">
+          <div>
+            <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#A79C8D;margin-bottom:16px">También en YouTube</div>
+            <h2 style="font-size:clamp(26px,3.2vw,34px);font-weight:400;color:#F6F1E9;letter-spacing:-0.02em;margin:0 0 14px;text-wrap:pretty">Las mismas meditaciones, en video</h2>
+            <p style="font-size:17px;line-height:1.6;color:#C4B9AA;margin:0;max-width:46ch">Onda de audio, palabras clave y música. Publicamos sesiones completas cada semana, gratis y sin cuenta.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+            <div style="position:relative;width:100%;aspect-ratio:16/9;background:#1B1713;border:1px solid #38302A;border-radius:3px;display:flex;align-items:center;justify-content:center;gap:3px;padding:0 14%">
+              <img src="assets/omtana-wordmark-white.svg" alt="Omtana" style="position:absolute;top:18px;left:18px;height:11px;width:auto;opacity:.5" />
+              <sc-for list="{{ darkBars }}" as="b" hint-placeholder-count="40">
+                <div style="{{ b.style }}"></div>
+              </sc-for>
+            </div>
+            <div style="font-size:13px;color:#8B8074;font-family:ui-monospace,monospace">frame exportado · 1920×1080</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:96px;border-top:1px solid #E4DACA;background:#F1EADF">
+        <div style="max-width:1180px;margin:0 auto;padding:56px 24px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:40px">
+          <div>
+            <img src="assets/omtana-wordmark-black.svg" alt="Omtana" style="height:17px;width:auto;display:block;margin-bottom:16px" />
+            <div style="font-size:14px;color:#8E8376;line-height:1.6;max-width:30ch">Meditaciones generadas a partir de tu intención. Santiago, Chile.</div>
+          </div>
+          <sc-for list="{{ footer }}" as="col" hint-placeholder-count="3">
+            <div>
+              <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#9A8F81;margin-bottom:16px">{{ col.title }}</div>
+              <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+                <sc-for list="{{ col.links }}" as="lnk" hint-placeholder-count="4">
+                  <button onClick="{{ lnk.go }}" style="background:none;border:none;padding:0;font-size:15px;color:#4A4239;cursor:pointer" style-hover="color:#B4643C">{{ lnk.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="max-width:1180px;margin:0 auto;padding:0 24px 48px;display:flex;gap:20px;flex-wrap:wrap;font-size:14px;color:#9A8F81">
+          <span>© 2026 Omtana</span>
+          <button onClick="{{ goTerms }}" style="background:none;border:none;padding:0;font-size:14px;color:#9A8F81;cursor:pointer">Términos y condiciones</button>
+          <button onClick="{{ goTerms }}" style="background:none;border:none;padding:0;font-size:14px;color:#9A8F81;cursor:pointer">Privacidad</button>
+          <span style="margin-left:auto">Español · English · Português</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Acceso" style="max-width:1180px;margin:0 auto;padding:64px 24px 100px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:64px;align-items:center">
+      <div>
+        <div style="display:flex;gap:4px;background:#EDE4D6;border-radius:999px;padding:4px;width:fit-content;margin-bottom:34px">
+          <button onClick="{{ setLogin }}" style="{{ loginTabStyle }}">Entrar</button>
+          <button onClick="{{ setSignup }}" style="{{ signupTabStyle }}">Crear cuenta</button>
+        </div>
+        <h2 style="font-size:clamp(28px,4vw,40px);font-weight:400;letter-spacing:-0.02em;margin:0 0 12px;text-wrap:pretty">{{ authTitle }}</h2>
+        <p style="font-size:17px;color:#6B6157;margin:0 0 34px;max-width:44ch;line-height:1.6">{{ authSub }}</p>
+
+        <div style="display:flex;flex-direction:column;gap:16px;max-width:420px">
+          <sc-if value="{{ isSignup }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <label style="display:block;font-size:14px;color:#6B6157;margin-bottom:8px">Nombre</label>
+              <input placeholder="Cómo quieres que te llamemos" style="width:100%;background:#FFFDF9;border:1px solid #E0D5C3;border-radius:4px;padding:14px 16px;font-size:16px;outline:none;color:#241F1A" />
+            </div>
+          </sc-if>
+          <div>
+            <label style="display:block;font-size:14px;color:#6B6157;margin-bottom:8px">Correo</label>
+            <input placeholder="tu@correo.com" style="width:100%;background:#FFFDF9;border:1px solid #E0D5C3;border-radius:4px;padding:14px 16px;font-size:16px;outline:none;color:#241F1A" />
+          </div>
+          <div>
+            <label style="display:block;font-size:14px;color:#6B6157;margin-bottom:8px">Contraseña</label>
+            <input type="password" placeholder="Mínimo 8 caracteres" style="width:100%;background:#FFFDF9;border:1px solid #E0D5C3;border-radius:4px;padding:14px 16px;font-size:16px;outline:none;color:#241F1A" />
+          </div>
+
+          <sc-if value="{{ isSignup }}" hint-placeholder-val="{{ false }}">
+            <label style="display:flex;gap:12px;align-items:flex-start;font-size:15px;color:#6B6157;line-height:1.5;cursor:pointer">
+              <input type="checkbox" style="margin-top:3px;accent-color:#B4643C;width:16px;height:16px" />
+              <span>Acepto los <a href="#terms" onClick="{{ goTerms }}">términos y condiciones</a> y el uso de mis intenciones para generar meditaciones.</span>
+            </label>
+          </sc-if>
+
+          <button onClick="{{ goHome }}" style="background:#241F1A;color:#F6F1E9;border:none;border-radius:999px;padding:16px;font-size:16px;cursor:pointer;margin-top:6px">{{ authCta }}</button>
+
+          <div style="display:flex;align-items:center;gap:14px;color:#B5AA9B;font-size:14px;margin:6px 0">
+            <div style="height:1px;background:#E4DACA;flex:1"></div><span>o</span><div style="height:1px;background:#E4DACA;flex:1"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+            <button onClick="{{ goHome }}" style="background:#FFFDF9;border:1px solid #E0D5C3;border-radius:999px;padding:13px;font-size:15px;cursor:pointer;color:#241F1A">Continuar con Google</button>
+            <button onClick="{{ goHome }}" style="background:#FFFDF9;border:1px solid #E0D5C3;border-radius:999px;padding:13px;font-size:15px;cursor:pointer;color:#241F1A">Continuar con Apple</button>
+          </div>
+          <div style="font-size:14px;color:#9A8F81;margin-top:6px">{{ authFootnote }}</div>
+        </div>
+      </div>
+
+      <div style="position:relative;aspect-ratio:1;max-width:460px;justify-self:center;width:100%;border-radius:50%;background:#FFFDF9;border:1px solid #E7DECF;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        <div style="position:absolute;width:78%;height:78%;border-radius:50%;background:radial-gradient(circle,#EBD6C6 0%,#F6E9DD 55%,rgba(246,233,221,0) 72%);animation:omBreathe 12s ease-in-out infinite"></div>
+        <div style="position:relative;text-align:center;padding:0 14%;display:flex;flex-direction:column;align-items:center;gap:26px">
+          <img src="assets/omtana-symbol-black.svg" alt="" style="width:56px;height:56px;display:block" />
+          <div style="font-size:22px;font-weight:300;line-height:1.5;color:#4A4239;text-wrap:pretty">Solo pedimos lo que hace falta para que tu biblioteca te siga.</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Home" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:40px">
+        <div>
+          <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:10px">Buenas tardes, Cristóbal</div>
+          <h2 style="font-size:clamp(30px,4vw,42px);font-weight:400;letter-spacing:-0.02em;margin:0;text-wrap:pretty">¿Qué quieres lograr hoy?</h2>
+        </div>
+        <button onClick="{{ goPlans }}" style="font-size:14px;color:#6B6157;border:1px solid #E0D5C3;border-radius:999px;padding:9px 16px;background:#FFFDF9;cursor:pointer">2 de 3 personalizaciones este mes</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;background:#FFFDF9;border:1px solid #E0D5C3;border-radius:999px;padding:14px 20px;margin-bottom:18px;flex-wrap:wrap">
+        <div style="width:7px;height:7px;border-radius:50%;background:#B4643C;flex:none"></div>
+        <input value="{{ intentionDraft }}" onChange="{{ setIntention }}" placeholder="Escribe tu intención: quiero dormir sin dar vueltas…" style="border:none;outline:none;background:transparent;font-size:17px;color:#241F1A;flex:1;min-width:160px" />
+        <button onClick="{{ goCustom }}" style="flex:none;background:#241F1A;color:#F6F1E9;border:none;border-radius:999px;padding:10px 22px;font-size:15px;cursor:pointer">Continuar</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:48px">
+        <span style="font-size:14px;color:#9A8F81;padding:6px 0;margin-right:4px">Sugerencias</span>
+        <sc-for list="{{ suggestions }}" as="sg" hint-placeholder-count="4">
+          <button onClick="{{ sg.go }}" style="background:transparent;border:1px solid #E0D5C3;border-radius:999px;padding:6px 14px;font-size:14px;color:#4A4239;cursor:pointer" style-hover="border-color:#C9A489">{{ sg.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px;gap:16px;flex-wrap:wrap">
+        <h3 style="font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:#8E8376;font-weight:500;margin:0">Banco de intenciones</h3>
+        <span style="font-size:14px;color:#8E8376">Listas para escuchar, sin generar</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:14px;margin-bottom:56px">
+        <sc-for list="{{ intentions }}" as="it" hint-placeholder-count="8">
+          <div onClick="{{ it.go }}" style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:26px 24px 22px;cursor:pointer;display:flex;flex-direction:column;min-height:176px" style-hover="border-color:#C9A489;transform:translateY(-2px)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:auto">
+              <img src="assets/omtana-symbol-black.svg" alt="" style="width:26px;height:26px;display:block;opacity:.32" />
+              <span style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#B5AA9B">{{ it.tag }}</span>
+            </div>
+            <div style="font-size:20px;letter-spacing:-0.01em;margin-top:26px;text-wrap:pretty">{{ it.title }}</div>
+            <div style="font-size:14px;color:#8E8376;margin-top:6px">{{ it.meta }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <h3 style="font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:#8E8376;font-weight:500;margin:0 0 18px">Continuar</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+        <sc-for list="{{ recent }}" as="r" hint-placeholder-count="2">
+          <div onClick="{{ r.go }}" style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:20px 22px;display:flex;align-items:center;gap:18px;cursor:pointer" style-hover="border-color:#C9A489">
+            <div style="width:40px;height:40px;border-radius:50%;background:#241F1A;color:#F6F1E9;display:flex;align-items:center;justify-content:center;font-size:11px;flex:none">▶</div>
+            <div style="min-width:0">
+              <div style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.title }}</div>
+              <div style="font-size:14px;color:#8E8376;margin-top:3px">{{ r.meta }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isCustom }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Personalizar" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px;align-items:start">
+      <div>
+        <button onClick="{{ goHome }}" style="background:none;border:none;padding:0;font-size:14px;color:#8E8376;cursor:pointer;margin-bottom:22px">← Volver al banco</button>
+        <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:10px">Personalizar</div>
+        <h2 style="font-size:clamp(28px,4vw,40px);font-weight:400;letter-spacing:-0.02em;margin:0 0 44px;text-wrap:pretty">{{ intentionDraft }}</h2>
+
+        <div style="margin-bottom:40px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Tu contexto</div>
+          <textarea onChange="{{ setContext }}" value="{{ contextText }}" rows="4" placeholder="Cuéntanos lo específico de tu caso." style="width:100%;background:#FFFDF9;border:1px solid #E0D5C3;border-radius:4px;padding:18px 20px;font-size:17px;line-height:1.55;color:#241F1A;outline:none;resize:vertical"></textarea>
+          <div style="font-size:13px;color:#9A8F81;margin-top:8px">Mientras más concreto, más se nota en los tramos personalizados.</div>
+        </div>
+
+        <div style="margin-bottom:40px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Duración</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <sc-for list="{{ durations }}" as="d" hint-placeholder-count="4">
+              <button onClick="{{ d.go }}" style="{{ d.style }}">{{ d.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="margin-bottom:40px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Idioma de la meditación</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <sc-for list="{{ medLangs }}" as="ml" hint-placeholder-count="3">
+              <button onClick="{{ ml.go }}" style="{{ ml.style }}">{{ ml.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="margin-bottom:40px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Voz</div>
+          <div style="display:flex;align-items:center;gap:18px;background:#FFFDF9;border:1px solid #E0D5C3;border-radius:4px;padding:18px 22px;flex-wrap:wrap">
+            <div style="width:44px;height:44px;border-radius:50%;background:#EADACE;flex:none"></div>
+            <div style="min-width:0;margin-right:auto">
+              <div style="font-size:18px">{{ voiceName }}</div>
+              <div style="font-size:14px;color:#8E8376;margin-top:2px">{{ voiceMeta }}</div>
+            </div>
+            <button onClick="{{ goVoices }}" style="background:transparent;border:1px solid #D5C9B6;border-radius:999px;padding:9px 18px;font-size:14px;cursor:pointer;color:#241F1A;flex:none">Cambiar</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:40px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Música de fondo</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <sc-for list="{{ musics }}" as="m" hint-placeholder-count="4">
+              <button onClick="{{ m.go }}" style="{{ m.style }}">{{ m.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Al terminar</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <sc-for list="{{ visibilityOptions }}" as="vo" hint-placeholder-count="2">
+              <button onClick="{{ vo.go }}" style="{{ vo.style }}">{{ vo.label }}</button>
+            </sc-for>
+          </div>
+          <div style="font-size:13px;color:#9A8F81;margin-top:10px">{{ visibilityNote }}</div>
+        </div>
+      </div>
+
+      <div style="position:sticky;top:88px;background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:30px 28px">
+        <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:22px">Tu sesión</div>
+        <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:26px">
+          <sc-for list="{{ structure }}" as="s" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="{{ s.chipStyle }}"></div>
+              <div style="min-width:0;margin-right:auto">
+                <div style="font-size:16px">{{ s.label }}</div>
+                <div style="font-size:13px;color:#9A8F81">{{ s.kind }}</div>
+              </div>
+              <div style="font-size:14px;color:#6B6157;flex:none">{{ s.min }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height:1px;background:#EDE4D6;margin-bottom:22px"></div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;color:#6B6157;margin-bottom:8px">
+          <span>Tramos personalizados</span><span>{{ chunkCount }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;color:#6B6157;margin-bottom:8px">
+          <span>Voz</span><span>{{ voiceName }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;color:#6B6157;margin-bottom:24px">
+          <span>Costo</span><span>{{ creditCost }}</span>
+        </div>
+        <button onClick="{{ goPlayer }}" style="{{ generateStyle }}">Generar meditación</button>
+        <div style="font-size:13px;color:#9A8F81;text-align:center;margin-top:12px">Lista en menos de un minuto</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPlayer }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Reproductor" style="position:relative;min-height:calc(100vh - 62px);overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px">
+      <div style="position:absolute;inset:-20%;background:radial-gradient(circle at 50% 48%,#F3DFCE 0%,#F7EADC 38%,rgba(246,241,233,0) 68%);animation:omBreathe 12s ease-in-out infinite;pointer-events:none"></div>
+
+      <div style="position:relative;width:100%;max-width:760px;display:flex;flex-direction:column;align-items:center">
+        <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#9A8F81;margin-bottom:16px">{{ phaseLabel }}</div>
+        <div style="font-size:clamp(28px,4.2vw,44px);font-weight:300;letter-spacing:-0.02em;text-align:center;margin-bottom:10px;text-wrap:pretty">{{ intentionDraft }}</div>
+        <div style="font-size:16px;color:#8E8376;margin-bottom:56px">{{ voiceName }} · {{ durationLabel }}</div>
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:3px;height:96px;width:100%;margin-bottom:20px">
+          <sc-for list="{{ playerBars }}" as="b" hint-placeholder-count="72">
+            <div style="{{ b.style }}"></div>
+          </sc-for>
+        </div>
+
+        <div style="min-height:52px;display:flex;align-items:center;margin-bottom:36px">
+          <div style="font-size:22px;font-weight:300;letter-spacing:.04em;color:#6B6157;animation:omFade .9s ease both">{{ keyword }}</div>
+        </div>
+
+        <div style="width:100%;max-width:520px;display:flex;align-items:center;gap:16px;margin-bottom:36px">
+          <span style="font-size:14px;color:#9A8F81;flex:none;font-variant-numeric:tabular-nums">{{ elapsedLabel }}</span>
+          <div style="flex:1;height:2px;background:#E2D6C4;border-radius:2px;overflow:hidden">
+            <div style="{{ progressStyle }}"></div>
+          </div>
+          <span style="font-size:14px;color:#9A8F81;flex:none;font-variant-numeric:tabular-nums">{{ durationLabel }}</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:22px;margin-bottom:44px">
+          <button onClick="{{ rewind }}" style="background:transparent;border:1px solid #DED3C2;color:#4A4239;width:52px;height:52px;border-radius:50%;font-size:13px;cursor:pointer">−15</button>
+          <button onClick="{{ togglePlay }}" style="background:#241F1A;border:none;color:#F6F1E9;width:76px;height:76px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">{{ playIcon }}</button>
+          <button onClick="{{ forward }}" style="background:transparent;border:1px solid #DED3C2;color:#4A4239;width:52px;height:52px;border-radius:50%;font-size:13px;cursor:pointer">+15</button>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+          <button onClick="{{ goLibrary }}" style="background:transparent;border:1px solid #DED3C2;border-radius:999px;padding:9px 18px;font-size:14px;color:#4A4239;cursor:pointer">Guardar en mi biblioteca</button>
+          <button onClick="{{ goVoices }}" style="background:transparent;border:1px solid #DED3C2;border-radius:999px;padding:9px 18px;font-size:14px;color:#4A4239;cursor:pointer">Cambiar de voz</button>
+          <button onClick="{{ goCustom }}" style="background:transparent;border:1px solid #DED3C2;border-radius:999px;padding:9px 18px;font-size:14px;color:#4A4239;cursor:pointer">Ajustar</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isVoices }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Voces" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px">
+      <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:10px">Banco de voces</div>
+      <h2 style="font-size:clamp(28px,4vw,40px);font-weight:400;letter-spacing:-0.02em;margin:0 0 12px;text-wrap:pretty">¿Quién quieres que te hable?</h2>
+      <p style="font-size:17px;color:#6B6157;max-width:52ch;margin:0 0 40px;line-height:1.6">Cada voz conduce la sesión como un personaje consistente. Escucha la muestra antes de elegir.</p>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:32px">
+        <sc-for list="{{ voiceFilters }}" as="f" hint-placeholder-count="6">
+          <button onClick="{{ f.go }}" style="{{ f.style }}">{{ f.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:14px">
+        <sc-for list="{{ voices }}" as="v" hint-placeholder-count="8">
+          <div onClick="{{ v.go }}" style="{{ v.cardStyle }}">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
+              <div style="width:48px;height:48px;border-radius:50%;background:#EADACE;flex:none"></div>
+              <div style="min-width:0;margin-right:auto">
+                <div style="font-size:19px">{{ v.name }}</div>
+                <div style="font-size:14px;color:#8E8376;margin-top:2px">{{ v.accent }}</div>
+              </div>
+              <div style="{{ v.checkStyle }}">✓</div>
+            </div>
+            <div style="font-size:15px;color:#6B6157;line-height:1.55;margin-bottom:18px;min-height:46px">{{ v.blurb }}</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+              <span style="font-size:13px;color:#6B6157;border:1px solid #E4DACA;border-radius:999px;padding:4px 11px">{{ v.gender }}</span>
+              <span style="font-size:13px;color:#6B6157;border:1px solid #E4DACA;border-radius:999px;padding:4px 11px">{{ v.tone }}</span>
+              <span style="font-size:13px;color:#6B6157;border:1px solid #E4DACA;border-radius:999px;padding:4px 11px">{{ v.lang }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:34px;height:34px;border-radius:50%;border:1px solid #D5C9B6;display:flex;align-items:center;justify-content:center;font-size:10px;color:#4A4239;flex:none">▶</div>
+              <div style="display:flex;align-items:center;gap:2px;height:20px;flex:1">
+                <sc-for list="{{ sampleBars }}" as="s" hint-placeholder-count="30">
+                  <div style="{{ s.style }}"></div>
+                </sc-for>
+              </div>
+              <span style="font-size:13px;color:#9A8F81;flex:none">0:12</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Biblioteca" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:32px">
+        <div>
+          <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:10px">Tu biblioteca</div>
+          <h2 style="font-size:clamp(28px,4vw,40px);font-weight:400;letter-spacing:-0.02em;margin:0">7 meditaciones tuyas</h2>
+        </div>
+        <button onClick="{{ goHome }}" style="background:#241F1A;color:#F6F1E9;border:none;border-radius:999px;padding:13px 24px;font-size:15px;cursor:pointer">Nueva meditación</button>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">
+        <sc-for list="{{ libFilters }}" as="lf" hint-placeholder-count="3">
+          <button onClick="{{ lf.go }}" style="{{ lf.style }}">{{ lf.label }}</button>
+        </sc-for>
+      </div>
+
+      <div style="border:1px solid #E7DECF;border-radius:4px;overflow:hidden;background:#FFFDF9">
+        <sc-for list="{{ library }}" as="l" hint-placeholder-count="5">
+          <div style="{{ l.rowStyle }}">
+            <div onClick="{{ goPlayer }}" style="width:38px;height:38px;border-radius:50%;border:1px solid #D5C9B6;display:flex;align-items:center;justify-content:center;font-size:10px;flex:none;cursor:pointer">▶</div>
+            <div style="min-width:0;flex:1">
+              <div style="font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.title }}</div>
+              <div style="font-size:14px;color:#9A8F81;margin-top:3px">{{ l.meta }}</div>
+            </div>
+            <span style="font-size:14px;color:#9A8F81;flex:none">{{ l.plays }}</span>
+            <button onClick="{{ l.toggle }}" style="{{ l.badgeStyle }}">{{ l.visibility }}</button>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="margin-top:28px;font-size:14px;color:#9A8F81;line-height:1.6;max-width:58ch">Las meditaciones se escuchan dentro de Omtana; no hay descarga de audio. Si publicas una, queda disponible para la comunidad con tu nombre, y puedes volver a dejarla privada cuando quieras.</div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPlans }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Planes" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px">
+      <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:10px">Planes y créditos</div>
+      <h2 style="font-size:clamp(28px,4vw,40px);font-weight:400;letter-spacing:-0.02em;margin:0 0 12px">Estás en el plan Free</h2>
+      <p style="font-size:17px;color:#6B6157;max-width:54ch;margin:0 0 40px;line-height:1.6">Te queda 1 personalización de 3 este mes. Se renueva el 1 de octubre.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:56px">
+        <sc-for list="{{ plans }}" as="p" hint-placeholder-count="3">
+          <div style="{{ p.cardStyle }}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+              <span style="font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#8E8376">{{ p.tag }}</span>
+              <span style="{{ p.currentStyle }}">Actual</span>
+            </div>
+            <div style="font-size:36px;font-weight:300;letter-spacing:-0.02em">{{ p.price }}</div>
+            <div style="font-size:14px;color:#8E8376;margin-bottom:24px">{{ p.per }}</div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
+              <sc-for list="{{ p.features }}" as="f" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;font-size:15px;line-height:1.5;color:#4A4239">
+                  <span style="color:#B4643C">—</span><span>{{ f.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <button onClick="{{ p.go }}" style="{{ p.btnStyle }}">{{ p.cta }}</button>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px">
+        <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:30px 28px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:20px">Comprar créditos</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+            <sc-for list="{{ creditPacks }}" as="cp" hint-placeholder-count="3">
+              <div onClick="{{ cp.go }}" style="{{ cp.style }}">
+                <div style="margin-right:auto">
+                  <div style="font-size:17px">{{ cp.qty }}</div>
+                  <div style="font-size:13px;color:#9A8F81;margin-top:2px">{{ cp.unit }}</div>
+                </div>
+                <div style="font-size:17px">{{ cp.price }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <button style="width:100%;background:#241F1A;color:#F6F1E9;border:none;border-radius:999px;padding:15px;font-size:16px;cursor:pointer">Pagar con Stripe</button>
+          <div style="font-size:13px;color:#9A8F81;text-align:center;margin-top:12px">Los créditos no vencen. Cada uno es una meditación tuya para siempre.</div>
+        </div>
+
+        <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:30px 28px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:20px">Movimientos</div>
+          <div style="display:flex;flex-direction:column">
+            <sc-for list="{{ ledger }}" as="lg" hint-placeholder-count="5">
+              <div style="{{ lg.rowStyle }}">
+                <div style="margin-right:auto;min-width:0">
+                  <div style="font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ lg.what }}</div>
+                  <div style="font-size:13px;color:#9A8F81;margin-top:2px">{{ lg.when }}</div>
+                </div>
+                <div style="{{ lg.amountStyle }}">{{ lg.amount }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Perfil" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px">
+      <div style="display:flex;align-items:center;gap:22px;margin-bottom:48px;flex-wrap:wrap">
+        <div style="width:76px;height:76px;border-radius:50%;background:#EADACE;border:1px solid #E0D5C3;flex:none"></div>
+        <div style="margin-right:auto">
+          <h2 style="font-size:clamp(26px,3.4vw,34px);font-weight:400;letter-spacing:-0.02em;margin:0">Cristóbal Schuchhardt</h2>
+          <div style="font-size:16px;color:#8E8376;margin-top:6px">cristobal@omtana.com · Plan Free · miembro desde agosto 2026</div>
+        </div>
+        <button onClick="{{ goPlans }}" style="background:#241F1A;color:#F6F1E9;border:none;border-radius:999px;padding:13px 24px;font-size:15px;cursor:pointer">Ver planes</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px">
+        <sc-for list="{{ stats }}" as="st" hint-placeholder-count="3">
+          <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:26px 24px">
+            <div style="font-size:34px;font-weight:300;letter-spacing:-0.02em">{{ st.value }}</div>
+            <div style="font-size:15px;color:#8E8376;margin-top:4px">{{ st.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px">
+        <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:30px 28px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:24px">Preferencias</div>
+          <div style="display:flex;flex-direction:column;gap:22px">
+            <div>
+              <div style="font-size:15px;color:#6B6157;margin-bottom:10px">Idioma de la aplicación</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <sc-for list="{{ langs }}" as="l" hint-placeholder-count="3">
+                  <button onClick="{{ l.go }}" style="{{ l.pillStyle }}">{{ l.full }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:15px;color:#6B6157;margin-bottom:10px">Voz por defecto</div>
+              <div style="display:flex;align-items:center;gap:14px;border:1px solid #E4DACA;border-radius:4px;padding:14px 16px">
+                <div style="width:34px;height:34px;border-radius:50%;background:#EADACE;flex:none"></div>
+                <div style="margin-right:auto;font-size:16px">{{ voiceName }}</div>
+                <button onClick="{{ goVoices }}" style="background:none;border:none;font-size:14px;color:#B4643C;cursor:pointer">Cambiar</button>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:15px;color:#6B6157;margin-bottom:10px">Duración habitual</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <sc-for list="{{ durations }}" as="d" hint-placeholder-count="4">
+                  <button onClick="{{ d.go }}" style="{{ d.style }}">{{ d.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:30px 28px">
+          <div style="font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8E8376;margin-bottom:24px">Cuenta y datos</div>
+          <div style="display:flex;flex-direction:column">
+            <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="4">
+              <div style="{{ t.rowStyle }}">
+                <div style="margin-right:auto;padding-right:18px">
+                  <div style="font-size:16px">{{ t.label }}</div>
+                  <div style="font-size:13px;color:#9A8F81;margin-top:3px;line-height:1.5">{{ t.note }}</div>
+                </div>
+                <button onClick="{{ t.toggle }}" style="{{ t.switchStyle }}">
+                  <span style="{{ t.knobStyle }}"></span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+          <div style="height:1px;background:#EDE4D6;margin:24px 0"></div>
+          <div style="display:flex;flex-direction:column;gap:14px;align-items:flex-start">
+            <button style="background:none;border:none;padding:0;font-size:15px;color:#4A4239;cursor:pointer">Cambiar contraseña</button>
+            <button onClick="{{ goTerms }}" style="background:none;border:none;padding:0;font-size:15px;color:#4A4239;cursor:pointer">Términos y privacidad</button>
+            <button onClick="{{ goLanding }}" style="background:none;border:none;padding:0;font-size:15px;color:#4A4239;cursor:pointer">Cerrar sesión</button>
+            <button style="background:none;border:none;padding:0;font-size:15px;color:#A4564F;cursor:pointer">Eliminar cuenta y datos</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isTerms }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Términos" style="max-width:1180px;margin:0 auto;padding:56px 24px 100px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:56px;align-items:start">
+      <div style="position:sticky;top:88px;max-width:280px">
+        <div style="font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8E8376;margin-bottom:14px">Legal</div>
+        <h2 style="font-size:30px;font-weight:400;letter-spacing:-0.02em;margin:0 0 10px">Términos y condiciones</h2>
+        <div style="font-size:14px;color:#9A8F81;margin-bottom:28px">Última actualización: 1 de septiembre de 2026</div>
+        <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+          <sc-for list="{{ termsIndex }}" as="ti" hint-placeholder-count="9">
+            <span style="font-size:15px;color:#6B6157">{{ ti.label }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="max-width:68ch;grid-column:span 2">
+        <sc-for list="{{ terms }}" as="t" hint-placeholder-count="9">
+          <div style="margin-bottom:38px">
+            <h3 style="font-size:20px;font-weight:500;letter-spacing:-0.01em;margin:0 0 12px">{{ t.title }}</h3>
+            <sc-for list="{{ t.paragraphs }}" as="p" hint-placeholder-count="2">
+              <p style="font-size:16px;line-height:1.7;color:#4A4239;margin:0 0 12px;text-wrap:pretty">{{ p.text }}</p>
+            </sc-for>
+          </div>
+        </sc-for>
+        <div style="background:#FFFDF9;border:1px solid #E7DECF;border-radius:4px;padding:26px 24px;font-size:15px;line-height:1.65;color:#6B6157">
+          Si algo de esto no queda claro, escríbenos a <a href="#contacto">hola@omtana.com</a> antes de aceptar. Preferimos responder una pregunta a que aceptes algo que no entiendes.
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#B4643C&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;#B4643C&quot;,&quot;#6E7A6B&quot;,&quot;#8A7B52&quot;,&quot;#A4564F&quot;]},&quot;$preview&quot;:{&quot;width&quot;:1280}}">
+const ACCENT_DEFAULT = "#B4643C";
+
+const INTENTIONS = [
+  { title: "Calmar la ansiedad", meta: "5 · 10 · 15 min", tag: "Popular" },
+  { title: "Dormir sin dar vueltas", meta: "10 · 20 min", tag: "Noche" },
+  { title: "Enfoque antes de trabajar", meta: "5 · 10 min", tag: "Mañana" },
+  { title: "Mejorar mi salud", meta: "10 · 15 · 20 min", tag: "Hábito" },
+  { title: "Fijar un objetivo", meta: "10 · 15 min", tag: "Hábito" },
+  { title: "Reparar una relación", meta: "15 · 20 min", tag: "Vínculos" },
+  { title: "Soltar el día", meta: "5 · 10 min", tag: "Noche" },
+  { title: "Gratitud por la mañana", meta: "5 min", tag: "Mañana" }
+];
+
+const VOICES = [
+  { name: "Aurora", accent: "Español neutro", gender: "Femenina", tone: "Media", lang: "ES · EN", blurb: "Pausada y templada. Funciona bien para sesiones largas y para dormir." },
+  { name: "Mateo", accent: "Español rioplatense", gender: "Masculina", tone: "Grave", lang: "ES", blurb: "Cercano, con silencios largos. El acento se nota y a mucha gente le acomoda." },
+  { name: "Lucía", accent: "Español de España", gender: "Femenina", tone: "Aguda", lang: "ES", blurb: "Clara y despierta. Buena para enfoque y para meditaciones de cinco minutos." },
+  { name: "Tomás", accent: "Español chileno", gender: "Masculina", tone: "Media", lang: "ES", blurb: "Directo, sin solemnidad. Para quien encuentra artificial el tono de meditación." },
+  { name: "Nora", accent: "Inglés británico", gender: "Femenina", tone: "Grave", lang: "EN", blurb: "Grave y contenida. La más pedida en las sesiones en inglés." },
+  { name: "Elías", accent: "Español mexicano", gender: "Masculina", tone: "Grave", lang: "ES · EN", blurb: "Cálido y amplio. Sostiene bien los tramos de respiración." },
+  { name: "Inês", accent: "Portugués de Brasil", gender: "Femenina", tone: "Media", lang: "PT", blurb: "Suave y con ritmo. Recién incorporada al banco." },
+  { name: "Ruben", accent: "Inglés estadounidense", gender: "Masculina", tone: "Media", lang: "EN", blurb: "Neutro y estable. La opción segura si no sabes por dónde empezar." }
+];
+
+const LIBRARY = [
+  { title: "Mejorar mi salud — dieta sin gluten", meta: "15 min · Aurora · 4 de septiembre", pub: false, plays: "8 escuchas" },
+  { title: "Dormir sin dar vueltas", meta: "20 min · Mateo · 1 de septiembre", pub: true, plays: "23 escuchas" },
+  { title: "Enfoque antes de una presentación", meta: "10 min · Aurora · 28 de agosto", pub: true, plays: "41 escuchas" },
+  { title: "Conversación difícil con mi hermano", meta: "15 min · Tomás · 22 de agosto", pub: false, plays: "3 escuchas" },
+  { title: "Gratitud por la mañana", meta: "5 min · Lucía · 19 de agosto", pub: true, plays: "112 escuchas" }
+];
+
+const KEYWORDS = ["Inhala", "Sostén", "Exhala", "Aquí", "Suelta", "Descansa"];
+const PHASES = ["Respiración guiada", "Cuerpo de la meditación", "Cierre"];
+
+const FAQS = [
+  { q: "¿En qué se diferencia de una app con catálogo?", a: "En que no eliges lo que más se acerca a tu caso. Declaras qué quieres lograr y el guion se escribe alrededor de eso, con tu contexto adentro." },
+  { q: "¿Cuánto demora generar una meditación?", a: "Menos de un minuto. La mayor parte del audio ya está pregenerada; solo los tramos personalizados se crean en el momento y se intercalan." },
+  { q: "¿Puedo descargar el audio?", a: "No. Las meditaciones se escuchan dentro de Omtana. Lo que generas queda en tu biblioteca mientras tengas cuenta." },
+  { q: "¿Qué pasa con lo que escribo en mi contexto?", a: "Se usa para escribir tu meditación. No aparece en las sesiones que publicas ni se comparte con otros usuarios." },
+  { q: "¿En qué idiomas está?", a: "Español, inglés y portugués, con voces propias para cada uno. El idioma de la meditación se elige aparte del idioma de la interfaz." }
+];
+
+const TERMS = [
+  { title: "1. Qué es este servicio", paragraphs: [
+    "Omtana es una aplicación que genera meditaciones guiadas combinando audio pregenerado con tramos escritos y sintetizados para cada persona a partir de la intención que declara.",
+    "Al crear una cuenta aceptas estos términos. Si no estás de acuerdo con alguna parte, no uses el servicio."] },
+  { title: "2. Tu cuenta", paragraphs: [
+    "Necesitas un correo válido y una contraseña para tener biblioteca propia. Eres responsable de mantener la contraseña en reserva y de la actividad que ocurra con tu cuenta.",
+    "Puedes cerrar tu cuenta cuando quieras desde tu perfil. Al hacerlo se elimina tu biblioteca personal; las meditaciones que publicaste dejan de mostrar tu nombre."] },
+  { title: "3. Créditos y pagos", paragraphs: [
+    "Escuchar el catálogo público es gratis. Generar una meditación personalizada consume un crédito, porque implica costos reales de generación de texto y de síntesis de voz.",
+    "Los pagos se procesan a través de Stripe. No almacenamos datos de tu tarjeta. Los créditos no vencen. Las suscripciones se renuevan de forma automática y puedes cancelarlas en cualquier momento, con efecto al final del período pagado."] },
+  { title: "4. Contenido generado", paragraphs: [
+    "Las meditaciones se generan con modelos de lenguaje y síntesis de voz. Pueden contener errores o formulaciones que no se ajusten a lo que esperabas.",
+    "La meditación que generas con un crédito queda disponible en tu biblioteca mientras tu cuenta esté activa. No hay exportación ni descarga de audio."] },
+  { title: "5. Publicación en la comunidad", paragraphs: [
+    "Puedes publicar las meditaciones que generas. Al publicarlas autorizas a Omtana a mostrarlas a otros usuarios dentro de la aplicación, junto a tu nombre de usuario.",
+    "Puedes volver a dejarlas privadas cuando quieras. Podemos retirar contenido que sea ofensivo, engañoso o que dé indicaciones de salud peligrosas."] },
+  { title: "6. Uso en video", paragraphs: [
+    "Las meditaciones producidas por el equipo de Omtana pueden publicarse como video en canales propios. Las meditaciones de usuarios no se publican fuera de la aplicación sin autorización expresa."] },
+  { title: "7. Esto no es tratamiento médico", paragraphs: [
+    "Omtana es una herramienta de bienestar. No diagnostica, no trata y no reemplaza atención médica ni psicológica.",
+    "Si atraviesas una crisis de salud mental, consulta a un profesional o a los servicios de urgencia de tu país. No uses meditaciones guiadas mientras conduces u operas maquinaria."] },
+  { title: "8. Tus datos", paragraphs: [
+    "Guardamos tu correo, las intenciones que declaras, las sesiones que completas y las voces que eliges. Esos datos se usan para hacer funcionar el servicio y para mejorar lo que se genera.",
+    "No vendemos datos personales identificables. Puedes pedir una copia de tus datos o su eliminación escribiéndonos, y respondemos dentro de treinta días."] },
+  { title: "9. Cambios en estos términos", paragraphs: [
+    "Si cambiamos algo relevante, te avisamos por correo con al menos quince días de anticipación. Seguir usando el servicio después de esa fecha significa que aceptas la nueva versión."] }
+];
+
+class Component extends DCLogic {
+  state = {
+    screen: "landing",
+    authMode: "signup",
+    lang: "ES",
+    medLang: "Español",
+    intention: "Mejorar mi salud",
+    context: "Estoy con una dieta sin gluten hace tres meses y me cuesta sostenerla los fines de semana.",
+    duration: 15,
+    music: "Cuerdas lentas",
+    visibility: "Privada",
+    voice: 0,
+    filter: "Todas",
+    libFilter: "Todas",
+    playing: true,
+    elapsed: 214,
+    kw: 0,
+    faq: 0,
+    pack: 1,
+    lib: LIBRARY.map(l => l.pub),
+    prefs: [true, true, false, true]
+  };
+
+  componentDidMount() {
+    this.tick = setInterval(() => {
+      if (this.state.screen !== "player" || !this.state.playing) return;
+      this.setState(s => ({
+        elapsed: (s.elapsed + 1) % (this.state.duration * 60),
+        kw: Math.floor(((s.elapsed + 1) / 4) % KEYWORDS.length)
+      }));
+    }, 1000);
+  }
+  componentWillUnmount() { clearInterval(this.tick); }
+
+  accent() { return this.props.accent || ACCENT_DEFAULT; }
+  go(screen) { return () => { this.setState({ screen }); if (typeof window !== "undefined") window.scrollTo(0, 0); }; }
+
+  bars(n, h, color, animate) {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const w = Math.sin(i * 0.37) * 0.5 + Math.sin(i * 0.11) * 0.35 + Math.sin(i * 1.7) * 0.15;
+      const height = Math.max(0.12, Math.abs(w)) * h;
+      const anim = animate ? "animation:omBar " + (1.6 + (i % 7) * 0.22) + "s ease-in-out " + ((i % 11) * 0.13) + "s infinite;" : "";
+      out.push({ style: "flex:1;max-width:4px;min-width:2px;border-radius:2px;background:" + color + ";height:" + height.toFixed(1) + "px;" + anim });
+    }
+    return out;
+  }
+
+  pill(active) {
+    return "border-radius:999px;padding:9px 18px;font-size:15px;cursor:pointer;border:1px solid " +
+      (active ? "#241F1A" : "#DED3C2") + ";background:" + (active ? "#241F1A" : "transparent") +
+      ";color:" + (active ? "#F6F1E9" : "#4A4239");
+  }
+
+  renderVals() {
+    const s = this.state;
+    const acc = this.accent();
+    const screens = [
+      ["landing", "Landing"], ["auth", "Acceso"], ["home", "Home"], ["custom", "Personalizar"],
+      ["player", "Reproductor"], ["voices", "Voces"], ["library", "Biblioteca"],
+      ["plans", "Planes"], ["profile", "Perfil"], ["terms", "Términos"]
+    ];
+    const mm = (t) => Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+    const total = s.duration * 60;
+
+    const short = s.duration <= 5;
+    const fixedOpen = short ? 1 : 2;
+    const chunks = Math.max(1, Math.round(s.duration * 0.25));
+    const refuerzo = s.duration - (fixedOpen * 3 + chunks);
+    const dot = (c) => "width:8px;height:8px;border-radius:50%;flex:none;background:" + c;
+    const sections = [
+      { label: "Respiración 4-7-8", kind: "Pregenerado", min: fixedOpen, own: false },
+      { label: "Entrada al cuerpo", kind: "Pregenerado", min: fixedOpen, own: false },
+      { label: "Tu contexto", kind: "Generado para ti", min: chunks, own: true },
+      { label: "Refuerzo e imágenes", kind: "Pregenerado", min: refuerzo, own: false },
+      { label: "Cierre", kind: "Pregenerado", min: fixedOpen, own: false }
+    ].filter(x => x.min > 0);
+
+    const phase = s.elapsed < fixedOpen * 60 ? 0 : s.elapsed > total - fixedOpen * 60 ? 2 : 1;
+
+    const planData = [
+      { id: "free", tag: "Free", price: "$0", per: "para siempre", current: true, cta: "Tu plan actual",
+        features: ["Catálogo público completo", "3 personalizaciones al mes", "Puedes publicar lo que generas"] },
+      { id: "credits", tag: "Créditos", price: "$3", per: "por meditación", current: false, cta: "Comprar créditos",
+        features: ["Pagas solo cuando generas", "La meditación queda tuya", "Sin suscripción"] },
+      { id: "pro", tag: "Pro", price: "$59", per: "al mes", current: false, cta: "Pasar a Pro",
+        features: ["Generación ilimitada", "Voces nuevas antes que el resto", "Sesiones de hasta 20 minutos"] }
+    ];
+
+    const langData = [["ES", "Español"], ["EN", "English"], ["PT", "Português"]];
+
+    return {
+      tabs: screens.map(([id, label]) => ({
+        label, go: this.go(id),
+        style: "border:none;background:" + (s.screen === id ? "#E7DCCB" : "transparent") +
+          ";color:" + (s.screen === id ? "#241F1A" : "#8E8376") +
+          ";border-radius:999px;padding:8px 13px;font-size:14px;cursor:pointer"
+      })),
+      langs: langData.map(([code, full]) => ({
+        label: code, full, go: () => this.setState({ lang: code }),
+        style: "border:none;background:transparent;color:" + (s.lang === code ? "#241F1A" : "#B5AA9B") +
+          ";font-size:13px;letter-spacing:.08em;cursor:pointer;padding:6px 6px",
+        pillStyle: this.pill(s.lang === code)
+      })),
+
+      isLanding: s.screen === "landing", isAuth: s.screen === "auth", isHome: s.screen === "home",
+      isCustom: s.screen === "custom", isPlayer: s.screen === "player", isVoices: s.screen === "voices",
+      isLibrary: s.screen === "library", isPlans: s.screen === "plans", isProfile: s.screen === "profile",
+      isTerms: s.screen === "terms",
+      goLanding: this.go("landing"), goHome: this.go("home"), goPlayer: this.go("player"),
+      goCustom: this.go("custom"), goVoices: this.go("voices"), goLibrary: this.go("library"),
+      goPlans: this.go("plans"), goTerms: this.go("terms"),
+      goSignup: () => { this.setState({ screen: "auth", authMode: "signup" }); window.scrollTo(0, 0); },
+
+      heroBars: this.bars(44, 54, acc, true),
+      playerBars: this.bars(72, 84, s.playing ? acc : "#D8CCBB", s.playing),
+      sampleBars: this.bars(30, 16, "#D5C4B2", false),
+      darkBars: this.bars(40, 46, "#C4A98F", true),
+
+      anatomy: [
+        { label: "Respiración 4-7-8", min: "2 min", chipStyle: dot("#D5C4B2") },
+        { label: "Entrada al cuerpo", min: "2 min", chipStyle: dot("#D5C4B2") },
+        { label: "Tu contexto", min: "4 min", chipStyle: dot(acc) },
+        { label: "Refuerzo e imágenes", min: "5 min", chipStyle: dot("#D5C4B2") },
+        { label: "Cierre", min: "2 min", chipStyle: dot("#D5C4B2") }
+      ],
+
+      faqs: FAQS.map((f, i) => ({
+        q: f.q, a: f.a, open: s.faq === i, sign: s.faq === i ? "−" : "+",
+        toggle: () => this.setState({ faq: s.faq === i ? -1 : i }),
+        wrapStyle: "border-bottom:1px solid #E4DACA;" + (i === 0 ? "border-top:1px solid #E4DACA;" : "")
+      })),
+
+      footer: [
+        { title: "Producto", links: [
+          { label: "Cómo funciona", go: this.go("landing") },
+          { label: "Banco de voces", go: this.go("voices") },
+          { label: "Planes y créditos", go: this.go("plans") },
+          { label: "Canal de YouTube", go: this.go("landing") } ] },
+        { title: "Cuenta", links: [
+          { label: "Entrar", go: () => this.setState({ screen: "auth", authMode: "login" }) },
+          { label: "Crear cuenta", go: () => this.setState({ screen: "auth", authMode: "signup" }) },
+          { label: "Mi biblioteca", go: this.go("library") },
+          { label: "Perfil", go: this.go("profile") } ] },
+        { title: "Legal", links: [
+          { label: "Términos y condiciones", go: this.go("terms") },
+          { label: "Privacidad", go: this.go("terms") },
+          { label: "Uso de datos", go: this.go("terms") },
+          { label: "hola@omtana.com", go: this.go("terms") } ] }
+      ],
+
+      isSignup: s.authMode === "signup",
+      setLogin: () => this.setState({ authMode: "login" }),
+      setSignup: () => this.setState({ authMode: "signup" }),
+      loginTabStyle: "border:none;border-radius:999px;padding:9px 22px;font-size:15px;cursor:pointer;background:" +
+        (s.authMode === "login" ? "#FFFDF9" : "transparent") + ";color:#241F1A",
+      signupTabStyle: "border:none;border-radius:999px;padding:9px 22px;font-size:15px;cursor:pointer;background:" +
+        (s.authMode === "signup" ? "#FFFDF9" : "transparent") + ";color:#241F1A",
+      authTitle: s.authMode === "signup" ? "Crea tu cuenta" : "Vuelve a entrar",
+      authSub: s.authMode === "signup"
+        ? "Con una cuenta gratis escuchas todo el catálogo y puedes personalizar tres meditaciones al mes."
+        : "Tu biblioteca, tus voces y tus intenciones te esperan donde las dejaste.",
+      authCta: s.authMode === "signup" ? "Crear cuenta" : "Entrar",
+      authFootnote: s.authMode === "signup"
+        ? "Solo pedimos correo y contraseña. Nada de teléfono ni tarjeta."
+        : "¿Olvidaste tu contraseña? Te enviamos un enlace al correo.",
+
+      suggestions: ["Bajar la ansiedad antes de dormir", "Sostener un hábito nuevo", "Antes de una conversación difícil", "Cinco minutos y volver"].map(t => ({
+        label: t, go: () => this.setState({ intention: t })
+      })),
+      intentions: INTENTIONS.map(it => ({
+        title: it.title, meta: it.meta, tag: it.tag,
+        go: () => { this.setState({ intention: it.title, screen: "custom" }); window.scrollTo(0, 0); }
+      })),
+      recent: [
+        { title: "Mejorar mi salud — dieta sin gluten", meta: "15 min · quedan 6:20", go: this.go("player") },
+        { title: "Soltar el día", meta: "5 min · escuchada ayer", go: this.go("player") }
+      ],
+
+      intentionDraft: s.intention,
+      setIntention: (e) => this.setState({ intention: e.target.value }),
+      contextText: s.context,
+      setContext: (e) => this.setState({ context: e.target.value }),
+
+      durations: [5, 10, 15, 20].map(d => ({
+        label: d + " min", go: () => this.setState({ duration: d }), style: this.pill(s.duration === d)
+      })),
+      musics: ["Cuerdas lentas", "Drone cálido", "Piano disperso", "Sin música"].map(m => ({
+        label: m, go: () => this.setState({ music: m }), style: this.pill(s.music === m)
+      })),
+      medLangs: ["Español", "English", "Português"].map(m => ({
+        label: m, go: () => this.setState({ medLang: m }), style: this.pill(s.medLang === m)
+      })),
+      visibilityOptions: ["Privada", "Publicar"].map(v => ({
+        label: v === "Privada" ? "Dejarla privada" : "Publicarla para la comunidad",
+        go: () => this.setState({ visibility: v }), style: this.pill(s.visibility === v)
+      })),
+      visibilityNote: s.visibility === "Privada"
+        ? "Solo tú la escuchas. Puedes publicarla después desde tu biblioteca."
+        : "Aparecerá en el catálogo público con tu nombre. Tu contexto escrito no se muestra.",
+
+      voiceName: VOICES[s.voice].name,
+      voiceMeta: VOICES[s.voice].accent + " · " + VOICES[s.voice].gender.toLowerCase() + " · tono " + VOICES[s.voice].tone.toLowerCase(),
+
+      structure: sections.map(x => ({
+        label: x.label, kind: x.kind, min: x.min + " min", chipStyle: dot(x.own ? acc : "#D5C4B2")
+      })),
+      chunkCount: chunks + " de " + s.duration + " min",
+      creditCost: "1 crédito",
+      generateStyle: "width:100%;background:" + acc + ";color:#FFF8F2;border:none;border-radius:999px;padding:16px;font-size:16px;cursor:pointer",
+
+      phaseLabel: PHASES[phase],
+      keyword: s.playing ? KEYWORDS[s.kw] : "En pausa",
+      elapsedLabel: mm(s.elapsed),
+      durationLabel: s.duration + ":00",
+      progressStyle: "height:100%;border-radius:2px;background:" + acc + ";width:" + ((s.elapsed / total) * 100).toFixed(1) + "%",
+      playIcon: s.playing ? "❙❙" : "▶",
+      togglePlay: () => this.setState(p => ({ playing: !p.playing })),
+      rewind: () => this.setState(p => ({ elapsed: Math.max(0, p.elapsed - 15) })),
+      forward: () => this.setState(p => ({ elapsed: Math.min(total - 1, p.elapsed + 15) })),
+
+      voiceFilters: ["Todas", "Español", "English", "Português", "Femenina", "Masculina"].map(f => ({
+        label: f, go: () => this.setState({ filter: f }), style: this.pill(s.filter === f)
+      })),
+      voices: VOICES.map((v, i) => Object.assign({}, v, { _i: i })).filter(v => {
+        const f = s.filter;
+        if (f === "Todas") return true;
+        if (f === "Español") return v.lang.indexOf("ES") >= 0;
+        if (f === "English") return v.lang.indexOf("EN") >= 0;
+        if (f === "Português") return v.lang.indexOf("PT") >= 0;
+        return v.gender === f;
+      }).map((v) => Object.assign({}, v, {
+        go: () => this.setState({ voice: v._i }),
+        cardStyle: "background:#FFFDF9;border:1px solid " + (s.voice === v._i ? acc : "#E7DECF") +
+          ";border-radius:4px;padding:24px 22px;cursor:pointer",
+        checkStyle: "flex:none;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#FFF8F2;background:" +
+          (s.voice === v._i ? acc : "transparent")
+      })),
+
+      libFilters: ["Todas", "Públicas", "Privadas"].map(f => ({
+        label: f, go: () => this.setState({ libFilter: f }), style: this.pill(s.libFilter === f)
+      })),
+      library: LIBRARY.map((l, i) => ({
+        title: l.title, meta: l.meta, plays: l.plays,
+        visibility: s.lib[i] ? "Pública" : "Privada",
+        toggle: () => this.setState(p => { const n = p.lib.slice(); n[i] = !n[i]; return { lib: n }; }),
+        rowStyle: "display:flex;align-items:center;gap:18px;padding:20px 24px;" + (i ? "border-top:1px solid #EDE4D6" : ""),
+        badgeStyle: "flex:none;cursor:pointer;font-size:14px;border-radius:999px;padding:7px 15px;border:1px solid " +
+          (s.lib[i] ? acc : "#DED3C2") + ";background:transparent;color:" + (s.lib[i] ? acc : "#8E8376")
+      })).filter((l) => s.libFilter === "Todas" || (s.libFilter === "Públicas") === (l.visibility === "Pública")),
+
+      plans: planData.map(p => ({
+        tag: p.tag, price: p.price, per: p.per, cta: p.current ? p.cta : p.cta,
+        features: p.features.map(t => ({ text: t })),
+        go: p.id === "free" ? this.go("home") : this.go("plans"),
+        cardStyle: "background:#FFFDF9;border:1px solid " + (p.id === "pro" ? acc : "#E7DECF") +
+          ";border-radius:4px;padding:30px 28px;display:flex;flex-direction:column",
+        currentStyle: p.current
+          ? "font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:" + acc + ";border:1px solid " + acc + ";border-radius:999px;padding:2px 9px"
+          : "display:none",
+        btnStyle: "margin-top:auto;width:100%;border-radius:999px;padding:14px;font-size:15px;cursor:pointer;border:1px solid " +
+          (p.id === "pro" ? "transparent" : "#DED3C2") + ";background:" + (p.id === "pro" ? "#241F1A" : "transparent") +
+          ";color:" + (p.id === "pro" ? "#F6F1E9" : "#241F1A")
+      })),
+      creditPacks: [
+        { qty: "1 crédito", unit: "una meditación", price: "$3" },
+        { qty: "5 créditos", unit: "$2,40 cada una", price: "$12" },
+        { qty: "15 créditos", unit: "$2 cada una", price: "$30" }
+      ].map((c, i) => ({
+        qty: c.qty, unit: c.unit, price: c.price,
+        go: () => this.setState({ pack: i }),
+        style: "display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:4px;cursor:pointer;border:1px solid " +
+          (s.pack === i ? acc : "#E4DACA")
+      })),
+      ledger: [
+        { what: "Mejorar mi salud — dieta sin gluten", when: "4 de septiembre", amount: "−1", neg: true },
+        { what: "Compra de 5 créditos", when: "2 de septiembre", amount: "+5", neg: false },
+        { what: "Dormir sin dar vueltas", when: "1 de septiembre", amount: "−1", neg: true },
+        { what: "Personalización incluida en Free", when: "1 de septiembre", amount: "+3", neg: false },
+        { what: "Enfoque antes de una presentación", when: "28 de agosto", amount: "−1", neg: true }
+      ].map((l, i) => ({
+        what: l.what, when: l.when, amount: l.amount,
+        rowStyle: "display:flex;align-items:center;gap:16px;padding:14px 0;" + (i ? "border-top:1px solid #EDE4D6" : ""),
+        amountStyle: "flex:none;font-size:16px;font-variant-numeric:tabular-nums;color:" + (l.neg ? "#9A8F81" : acc)
+      })),
+
+      stats: [
+        { value: "41", label: "sesiones completadas" },
+        { value: "9 h 20", label: "escuchadas en total" },
+        { value: "7", label: "meditaciones tuyas" }
+      ],
+      toggles: [
+        { label: "Recordatorio diario", note: "Un aviso a las 21:00 para tu sesión de la noche." },
+        { label: "Correos sobre voces nuevas", note: "Cuando se suma un actor al banco." },
+        { label: "Publicar por defecto", note: "Todo lo que generes queda público salvo que lo cambies." },
+        { label: "Usar mis sesiones para mejorar el servicio", note: "Datos agregados, sin el texto de tu contexto." }
+      ].map((t, i) => ({
+        label: t.label, note: t.note,
+        toggle: () => this.setState(p => { const n = p.prefs.slice(); n[i] = !n[i]; return { prefs: n }; }),
+        rowStyle: "display:flex;align-items:center;padding:16px 0;" + (i ? "border-top:1px solid #EDE4D6" : ""),
+        switchStyle: "flex:none;width:46px;height:26px;border-radius:999px;border:none;cursor:pointer;padding:3px;display:flex;justify-content:" +
+          (s.prefs[i] ? "flex-end" : "flex-start") + ";background:" + (s.prefs[i] ? acc : "#DED3C2"),
+        knobStyle: "display:block;width:20px;height:20px;border-radius:50%;background:#FFFDF9"
+      })),
+
+      termsIndex: TERMS.map(t => ({ label: t.title })),
+      terms: TERMS.map(t => ({ title: t.title, paragraphs: t.paragraphs.map(p => ({ text: p })) }))
+    };
+  }
+}
+
+</script>
+</body>
+</html>
