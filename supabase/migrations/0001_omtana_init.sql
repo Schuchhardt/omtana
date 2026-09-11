@@ -221,8 +221,16 @@ create table omtana_leads (
 
 -- ─────────────────────────────────────────── Cierre de acceso público
 
-revoke all on all tables in schema public from anon, authenticated;
-revoke all on all sequences in schema public from anon, authenticated;
-revoke all on all functions in schema public from anon, authenticated;
-alter default privileges in schema public revoke all on tables from anon, authenticated;
-alter default privileges in schema public revoke all on sequences from anon, authenticated;
+-- Solo sobre las tablas de Omtana: este proyecto de Supabase es compartido con
+-- otras apps, y un "revoke on all tables in schema public" les quitaría el
+-- acceso por anon key sin avisar. El schema public no se toca.
+do $$
+declare t record;
+begin
+  for t in
+    select tablename from pg_tables
+    where schemaname = 'public' and tablename like 'omtana\_%'
+  loop
+    execute format('revoke all on public.%I from anon, authenticated', t.tablename);
+  end loop;
+end $$;

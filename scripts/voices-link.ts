@@ -65,6 +65,31 @@ async function main() {
     return;
   }
 
+  if (args.flags.has("check")) {
+    log.title("Validando enlaces");
+    const { synthesize } = await import("../src/lib/generation/tts");
+    let bad = 0;
+
+    for (const v of voices) {
+      if (!v.provider_voice_id) {
+        log.warn(`${v.slug.padEnd(8)} sin enlazar`);
+        bad++;
+        continue;
+      }
+      try {
+        await synthesize({ voiceId: v.provider_voice_id, text: "Hola.", settings: v.provider_settings });
+        log.ok(`${v.slug.padEnd(8)} ${provider.find((p) => p.voice_id === v.provider_voice_id)?.name ?? ""}`);
+      } catch (err) {
+        bad++;
+        const msg = err instanceof Error ? err.message : String(err);
+        log.fail(`${v.slug.padEnd(8)} ${/voice_disabled/.test(msg) ? "la voz fue deshabilitada por su dueño" : msg.slice(0, 120)}`);
+      }
+    }
+
+    log.done(bad === 0 ? "Las 8 responden." : `${bad} por arreglar.`);
+    return;
+  }
+
   /* Por defecto: mostrar el estado */
   log.title("Voces de Omtana");
   for (const v of voices) {

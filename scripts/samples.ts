@@ -36,10 +36,13 @@ async function main() {
 
   log.title(`Grabando ${voices.length} muestra${voices.length === 1 ? "" : "s"}`);
 
+  const broken: string[] = [];
+
   for (const voice of voices) {
     log.step(voice.name);
     const line = LINES[voice.languages[0]] ?? LINES.es;
 
+    try {
     const mp3 = await synthesize({
       voiceId: voice.provider_voice_id!,
       text: line,
@@ -59,9 +62,18 @@ async function main() {
       .update({ sample_url: signed?.signedUrl ?? url.publicUrl })
       .eq("id", voice.id);
 
-    log.ok(`${voice.name} lista`);
+      log.ok(`${voice.name} lista`);
+    } catch (err) {
+      // Una voz caída (deshabilitada por su dueño, sin cuota) no puede frenar al resto.
+      broken.push(voice.slug);
+      log.fail(`${voice.name} — ${err instanceof Error ? err.message.slice(0, 140) : err}`);
+    }
   }
 
+  if (broken.length) {
+    log.warn(`Sin muestra: ${broken.join(", ")}`);
+    log.info("Reasígnalas con: npm run voices:link -- <slug>=<voice_id>");
+  }
   log.done("Muestras arriba.");
 }
 

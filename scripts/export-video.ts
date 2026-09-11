@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { log, requireEnv, parseArgs, fatal } from "./_bootstrap";
 import { db } from "../src/lib/supabase";
-import { downloadAudio, uploadAudio } from "../src/lib/storage";
+import { downloadAudio, uploadAudio, FileTooLargeError } from "../src/lib/storage";
 import { run, durationOf } from "../src/lib/generation/audio";
 import type { Cue, Meditation, Voice } from "../src/lib/types";
 
@@ -178,11 +178,15 @@ async function exportOne(
     ]);
 
     // También queda en storage, para no depender de la máquina que lo renderizó.
-    const storedPath = await uploadAudio(
-      `videos/${id}.mp4`,
-      await readFile(outPath),
-      "video/mp4",
-    );
+    // Un 1080p largo puede pasar el techo de subida del proyecto; en ese caso el
+    // archivo local sigue siendo válido — es el que se sube a YouTube.
+    let storedPath: string | null = null;
+    try {
+      storedPath = await uploadAudio(`videos/${id}.mp4`, await readFile(outPath), "video/mp4");
+    } catch (err) {
+      if (!(err instanceof FileTooLargeError)) throw err;
+      log.warn(`${meditation.title}: no se copió al bucket — ${err.message}`);
+    }
 
     await db()
       .from("omtana_video_exports")

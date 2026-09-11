@@ -10,13 +10,16 @@ export async function ensureBucket(): Promise<void> {
   if (data?.some((b) => b.name === AUDIO_BUCKET)) return;
 
   // Privado a propósito: el audio solo sale por URL firmada desde el servidor.
+  // Sin fileSizeLimit propio: hereda el límite global del proyecto, así que si
+  // lo subes en Supabase el bucket lo sigue sin tocar código.
   const { error } = await db().storage.createBucket(AUDIO_BUCKET, {
     public: false,
-    fileSizeLimit: "80MB",
     allowedMimeTypes: ["audio/mpeg", "audio/mp4", "audio/wav", "video/mp4"],
   });
   if (error && !/already exists/i.test(error.message)) throw new Error(error.message);
 }
+
+export class FileTooLargeError extends Error {}
 
 export async function uploadAudio(
   path: string,
@@ -26,7 +29,15 @@ export async function uploadAudio(
   const { error } = await db()
     .storage.from(AUDIO_BUCKET)
     .upload(path, body, { contentType, upsert: true });
-  if (error) throw new Error(`Subida fallida (${path}): ${error.message}`);
+  if (error) {
+    if (/exceeded the maximum allowed size|Payload too large/i.test(error.message)) {
+      throw new FileTooLargeError(
+        `${path} pasa el límite de subida del proyecto ` +
+          `(${(body.byteLength / 1048576).toFixed(0)} MB). Súbelo en Supabase → Storage → Settings.`,
+      );
+    }
+    throw new Error(`Subida fallida (${path}): ${error.message}`);
+  }
   return path;
 }
 

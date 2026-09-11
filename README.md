@@ -79,7 +79,10 @@ npm run generate -- --retry
 ```
 
 Opciones: `--intencion`, `--i <slug>`, `--contexto`, `--duracion 5|10|15|20`,
-`--voz <slug>`, `--musica <slug>|ninguna`, `--idioma es|en|pt`, `--publica`.
+`--voz <slug>`, `--musica <slug>|ninguna`, `--idioma es|en|pt`, `--privada`.
+
+Lo que generas desde el CLI va al catálogo público: no tiene usuario dueño, así
+que dejarlo privado lo volvería invisible. `--privada` existe igual, con aviso.
 
 La primera meditación de una intención paga la plantilla (bloques fijos escritos
 y sintetizados una vez). Las siguientes con esa misma intención, duración, idioma

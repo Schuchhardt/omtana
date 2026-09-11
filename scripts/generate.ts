@@ -74,7 +74,13 @@ async function single(
   const voice = pickVoice(voices, args.values.get("voz"));
   const track = pickMusic(music, args.values.get("musica"));
   const locale = args.values.get("idioma") ?? "es";
-  const visibility = args.flags.has("publica") ? "public" : "private";
+
+  // Lo que sale del CLI no tiene dueño, así que "privada" la dejaría invisible
+  // para todos. El default es el catálogo público — es lo que produce el equipo.
+  const visibility = args.flags.has("privada") ? "private" : "public";
+  if (visibility === "private") {
+    log.warn("--privada sin usuario dueño: no aparecerá en el catálogo ni en ninguna biblioteca.");
+  }
 
   log.title(`Generando: ${intention}`);
   log.info(`${duration} min · ${voice.name} · ${track?.name ?? "sin música"} · ${locale}`);
@@ -89,7 +95,7 @@ async function single(
     voiceId: voice.id,
     musicId: track?.id ?? null,
     visibility,
-    source: visibility === "public" ? "curated" : "user",
+    source: "curated",
   });
 
   await runOne(id, intention);
