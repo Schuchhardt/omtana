@@ -3,7 +3,7 @@ import { downloadAudio, ensureBucket, uploadAudio } from "../storage";
 import { planSession } from "../session-plan";
 import { writeScript } from "./script";
 import { synthesize } from "./tts";
-import { assemble, type SegmentInput } from "./audio";
+import { assemble, ensureFfmpeg, type SegmentInput } from "./audio";
 import { ensureTemplate } from "./template";
 import type { Intention, Meditation, MusicTrack, Voice } from "../types";
 
@@ -56,6 +56,9 @@ export async function generateMeditation(
   const durationMinutes = Math.max(5, Math.round(meditation.duration_seconds / 60) || 15);
   const plan = planSession(durationMinutes);
 
+  // Antes que nada: sin ffmpeg no hay mezcla posible, y todo lo que viene
+  // después cuesta plata. Que falle acá y no al final.
+  await ensureFfmpeg();
   await ensureBucket();
 
   /* 1 ─ Plantilla: bloques fijos, generados una vez por intención/voz/duración. */

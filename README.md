@@ -143,6 +143,27 @@ error devuelve el crédito y lo deja anotado en el libro de movimientos.
 **El cupo mensual no necesita cron.** Se reinicia solo la primera vez que el
 usuario aparece dentro de un mes nuevo.
 
+## Despliegue
+
+El sitio está en Netlify con `@netlify/plugin-nextjs`. Las páginas, la sesión, el
+catálogo y el reproductor funcionan ahí sin más.
+
+**La generación en vivo no corre en Netlify.** La mezcla usa `ffmpeg` y las
+funciones de Netlify (Lambda) no traen binarios. El pipeline lo comprueba antes
+de gastar en modelo y en síntesis, así que falla de inmediato y con mensaje claro
+en vez de a mitad de camino. Tres salidas, de menor a mayor esfuerzo:
+
+1. **Generar desde tu máquina** con `npm run generate`, que es como se arma el
+   catálogo y el canal de YouTube igual. La app en producción queda de lectura.
+2. **Incluir un ffmpeg estático** (`ffmpeg-static`, ~80 MB) en el bundle de la
+   función y apuntar `FFMPEG_PATH` al binario que instala.
+3. **Mover la generación a un worker** con ffmpeg disponible, y que la app solo
+   encole. Es lo que conviene si llega tráfico real: hoy la generación corre
+   dentro de la petición vía `after()`, que en serverless puede cortarse.
+
+`netlify.toml` solo declara que `ELEVENLABS_MODEL_ID` no es un secreto — es el id
+público del modelo. El escaneo sigue activo para todas las demás claves.
+
 ## Lo que queda por definir
 
 Estos números están en `src/lib/config.ts`, en un solo lugar, con los valores del

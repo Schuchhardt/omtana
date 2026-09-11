@@ -1,0 +1,15 @@
+# El comando de build, el publish y el plugin de Next vienen de la UI de Netlify.
+# Acá solo va lo que tiene que vivir en el repo.
+
+[build.environment]
+  # "eleven_multilingual_v2" es el id público del modelo de ElevenLabs, no un
+  # secreto. Está como default en src/lib/generation/tts.ts y documentado en
+  # .env.example; el escáner lo marcaba solo porque además está cargado como
+  # variable de entorno en Netlify.
+  #
+  # Se omite esta clave y nada más: SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY,
+  # ELEVENLABS_API_KEY y STRIPE_SECRET_KEY siguen escaneándose.
+  SECRETS_SCAN_OMIT_KEYS = "ELEVENLABS_MODEL_ID"
+
+  # Plantilla de variables: nombres y comentarios, nunca valores reales.
+  SECRETS_SCAN_OMIT_PATHS = ".env.example"

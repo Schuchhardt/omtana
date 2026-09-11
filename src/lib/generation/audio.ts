@@ -22,6 +22,33 @@ export async function run(bin: string, args: string[]): Promise<string> {
   });
 }
 
+export class FfmpegMissingError extends Error {}
+
+let ffmpegChecked: boolean | null = null;
+
+/**
+ * Comprueba que ffmpeg exista antes de gastar en modelo y en síntesis.
+ *
+ * En un runtime serverless (Netlify, Lambda) no viene incluido, y sin esto el
+ * fallo aparecía recién al mezclar: después de escribir el guion y de grabar la
+ * voz, con el costo ya consumido.
+ */
+export async function ensureFfmpeg(): Promise<void> {
+  if (ffmpegChecked === true) return;
+
+  try {
+    await run(FFMPEG, ["-version"]);
+    ffmpegChecked = true;
+  } catch {
+    ffmpegChecked = false;
+    throw new FfmpegMissingError(
+      `No hay ffmpeg en este entorno (${FFMPEG}). La mezcla de audio lo necesita. ` +
+        `En servidores sin binarios, genera con "npm run generate" desde una máquina que sí lo tenga, ` +
+        `o define FFMPEG_PATH apuntando a uno incluido en el despliegue.`,
+    );
+  }
+}
+
 export async function durationOf(file: string): Promise<number> {
   const out = await run(FFPROBE, [
     "-v", "error",
