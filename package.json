@@ -6,7 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "db:push": "tsx --conditions=react-server scripts/db-push.ts",
+    "seed": "tsx --conditions=react-server scripts/seed.ts",
+    "voices:link": "tsx --conditions=react-server scripts/voices-link.ts",
+    "samples": "tsx --conditions=react-server scripts/samples.ts",
+    "generate": "tsx --conditions=react-server scripts/generate.ts",
+    "video": "tsx --conditions=react-server scripts/export-video.ts",
+    "setup": "npm run db:push && npm run seed"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -26,6 +34,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"

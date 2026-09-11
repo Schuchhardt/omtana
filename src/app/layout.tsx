@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Jost } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SetupNotice } from "@/components/SetupNotice";
 
 const jost = Jost({
   subsets: ["latin"],
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={jost.variable}>
       <body className="min-h-screen font-sans">
+        <SetupNotice />
         <SiteHeader />
         {children}
       </body>

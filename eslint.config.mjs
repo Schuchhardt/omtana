@@ -3,6 +3,8 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
 const eslintConfig = defineConfig([
+  // `design/` es el export original de Claude Design: referencia, no código del proyecto.
+  globalIgnores(["design/**", ".next/**", "out/**"]),
   ...nextVitals,
   ...nextTs,
   // Override default ignores of eslint-config-next.

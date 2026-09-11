@@ -8,6 +8,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  */
 let client: SupabaseClient | null = null;
 
+/** Permite que la app arranque y se vea antes de tener el proyecto de Supabase. */
+export function isConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 export function db(): SupabaseClient {
   if (client) return client;
 

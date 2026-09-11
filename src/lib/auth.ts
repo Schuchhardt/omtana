@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { randomBytes, scrypt, timingSafeEqual, createHash } from "node:crypto";
 import { promisify } from "node:util";
-import { db } from "./supabase";
+import { db, isConfigured } from "./supabase";
 import { SESSION_COOKIE, SESSION_DAYS } from "./config";
 import type { User } from "./types";
 
@@ -73,6 +73,8 @@ export async function destroySession(): Promise<void> {
 
 /** Usuario de la petición actual, o null. Nunca lanza. */
 export async function currentUser(): Promise<User | null> {
+  if (!isConfigured()) return null;
+
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;

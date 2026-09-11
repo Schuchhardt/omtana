@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "./supabase";
+import { db, isConfigured } from "./supabase";
 import { PLAN } from "./config";
 import type {
   Cue,
@@ -13,6 +13,7 @@ import type {
 } from "./types";
 
 export async function listIntentions(): Promise<Intention[]> {
+  if (!isConfigured()) return [];
   const { data } = await db()
     .from("omtana_intentions")
     .select("*")
@@ -22,6 +23,7 @@ export async function listIntentions(): Promise<Intention[]> {
 }
 
 export async function listVoices(): Promise<Voice[]> {
+  if (!isConfigured()) return [];
   const { data } = await db()
     .from("omtana_voices")
     .select("*")
@@ -31,6 +33,7 @@ export async function listVoices(): Promise<Voice[]> {
 }
 
 export async function listMusic(): Promise<MusicTrack[]> {
+  if (!isConfigured()) return [];
   const { data } = await db()
     .from("omtana_music_tracks")
     .select("*")
@@ -47,6 +50,7 @@ export async function getVoice(id: string | null): Promise<Voice | null> {
 
 /** Catálogo público: lo del equipo más lo que la comunidad publicó. */
 export async function listCatalog(limit = 24): Promise<Meditation[]> {
+  if (!isConfigured()) return [];
   const { data } = await db()
     .from("omtana_meditations")
     .select("*")

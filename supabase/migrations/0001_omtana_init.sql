@@ -9,7 +9,7 @@ create extension if not exists pgcrypto;
 
 create table omtana_users (
   id               uuid primary key default gen_random_uuid(),
-  email            text not null unique,
+  email            text not null,
   name             text not null,
   password_hash    text not null,
   plan             text not null default 'free' check (plan in ('free', 'pro')),
@@ -23,7 +23,9 @@ create table omtana_users (
   stripe_customer_id text,
   created_at       timestamptz not null default now()
 );
-create index omtana_users_email_idx on omtana_users (lower(email));
+-- Único sobre lower(email): "Seba@" y "seba@" son la misma cuenta, aunque el
+-- insert venga de un script y no del formulario, que ya normaliza a minúsculas.
+create unique index omtana_users_email_idx on omtana_users (lower(email));
 
 create table omtana_sessions (
   token_hash text primary key,
