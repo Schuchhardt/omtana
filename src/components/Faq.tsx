@@ -2,35 +2,17 @@
 
 import { useState } from "react";
 
-const FAQS = [
-  {
-    q: "¿En qué se diferencia de una app con catálogo?",
-    a: "En que no eliges lo que más se acerca a tu caso. Declaras qué quieres lograr y el guion se escribe alrededor de eso, con tu contexto adentro.",
-  },
-  {
-    q: "¿Cuánto demora generar una meditación?",
-    a: "Menos de un minuto. La mayor parte del audio ya está pregenerada; solo los tramos personalizados se crean en el momento y se intercalan.",
-  },
-  {
-    q: "¿Puedo descargar el audio?",
-    a: "No. Las meditaciones se escuchan dentro de Omtana. Lo que generas queda en tu biblioteca mientras tengas cuenta.",
-  },
-  {
-    q: "¿Qué pasa con lo que escribo en mi contexto?",
-    a: "Se usa para escribir tu meditación. No aparece en las sesiones que publicas ni se comparte con otros usuarios.",
-  },
-  {
-    q: "¿En qué idiomas está?",
-    a: "Español, inglés y portugués, con voces propias para cada uno. El idioma de la meditación se elige aparte del idioma de la interfaz.",
-  },
-];
+export interface FaqItem {
+  q: string;
+  a: string;
+}
 
-export function Faq() {
+export function Faq({ items }: { items: FaqItem[] }) {
   const [open, setOpen] = useState(0);
 
   return (
     <div>
-      {FAQS.map((f, i) => (
+      {items.map((f, i) => (
         <div key={f.q} className={`border-b border-line ${i === 0 ? "border-t" : ""}`}>
           <button
             type="button"

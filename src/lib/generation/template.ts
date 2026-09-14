@@ -3,6 +3,7 @@ import { db } from "../supabase";
 import { uploadAudio } from "../storage";
 import { planSession, wordTarget, type PlannedSection } from "../session-plan";
 import { synthesize } from "./tts";
+import { localized } from "../i18n";
 import type { Intention, Voice } from "../types";
 
 const MODEL = "claude-opus-5";
@@ -74,8 +75,8 @@ async function writeFixedSections(
         content: `Idioma: ${LANGUAGE[locale] ?? LANGUAGE.es}.
 Patrón de respiración de la apertura: ${breathingPattern}.
 
-Intención de esta plantilla: "${intention.title}".
-${intention.brief || intention.summary}
+Intención de esta plantilla: "${localized(intention, locale, "title")}".
+${localized(intention, locale, "brief") || localized(intention, locale, "summary")}
 
 Entre la sección de entrada al cuerpo y la de refuerzo va un tramo que se
 escribe aparte para cada persona. Tus bloques tienen que encajar antes y después

@@ -2,15 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { Copy } from "@/lib/i18n";
 
-const SUGGESTIONS = [
-  "Bajar la ansiedad antes de dormir",
-  "Sostener un hábito nuevo",
-  "Antes de una conversación difícil",
-  "Cinco minutos y volver",
-];
-
-export function IntentionInput() {
+export function IntentionInput({ t }: { t: Copy["intentionInput"] }) {
   const router = useRouter();
   const [value, setValue] = useState("");
 
@@ -34,8 +28,8 @@ export function IntentionInput() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           maxLength={160}
-          aria-label="Tu intención"
-          placeholder="Escribe tu intención: quiero dormir sin dar vueltas…"
+          aria-label={t.ariaLabel}
+          placeholder={t.placeholder}
           className="min-w-[160px] flex-1 border-none bg-transparent text-[17px] text-ink outline-none"
         />
         <button
@@ -43,13 +37,13 @@ export function IntentionInput() {
           disabled={!value.trim()}
           className="om-btn om-btn-solid flex-none px-[22px] py-[10px] text-[15px]"
         >
-          Continuar
+          {t.submit}
         </button>
       </form>
 
       <div className="mb-12 flex flex-wrap items-center gap-2">
-        <span className="mr-1 py-1.5 text-[14px] text-faint">Sugerencias</span>
-        {SUGGESTIONS.map((s) => (
+        <span className="mr-1 py-1.5 text-[14px] text-faint">{t.suggestionsLabel}</span>
+        {t.suggestions.map((s) => (
           <button
             key={s}
             type="button"

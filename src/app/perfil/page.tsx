@@ -6,22 +6,32 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listVoices, userStats } from "@/lib/queries";
 import { formatLongDate } from "@/lib/format";
+import { getLang } from "@/lib/lang";
+import { copy, fill } from "@/lib/i18n";
 
-export const metadata: Metadata = { title: "Mi perfil" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: copy(await getLang()).meta.titles.profile };
+}
 
 export default async function PerfilPage() {
   const user = await currentUser();
   if (!user) redirect("/acceso");
 
-  const [voices, stats] = await Promise.all([listVoices(), userStats(user.id)]);
+  const [voices, stats, lang] = await Promise.all([
+    listVoices(),
+    userStats(user.id),
+    getLang(),
+  ]);
+
+  const t = copy(lang).profile;
 
   const cards = [
-    { value: String(stats.completed), label: "sesiones completadas" },
+    { value: String(stats.completed), label: t.statCompleted },
     {
       value: stats.hours > 0 ? `${stats.hours} h ${stats.minutes}` : `${stats.minutes} min`,
-      label: "escuchadas en total",
+      label: t.statListened,
     },
-    { value: String(stats.owned), label: "meditaciones tuyas" },
+    { value: String(stats.owned), label: t.statOwned },
   ];
 
   return (
@@ -35,12 +45,12 @@ export default async function PerfilPage() {
           <div className="mr-auto">
             <h1 className="text-[clamp(26px,3.4vw,34px)]">{user.name}</h1>
             <p className="mt-1.5 text-[16px] text-muted-soft">
-              {user.email} · Plan {user.plan === "pro" ? "Pro" : "Free"} · miembro desde{" "}
-              {formatLongDate(user.created_at)}
+              {user.email} · {user.plan === "pro" ? "Pro" : "Free"} ·{" "}
+              {fill(t.memberSince, { date: formatLongDate(user.created_at, lang) })}
             </p>
           </div>
           <Link href="/planes" className="om-btn om-btn-solid px-6 py-[13px] text-[15px]">
-            Ver planes
+            {t.viewPlans}
           </Link>
         </div>
 
@@ -59,6 +69,7 @@ export default async function PerfilPage() {
           defaultDuration={user.default_duration}
           prefs={user.prefs}
           voices={voices}
+          t={t}
         />
       </div>
 

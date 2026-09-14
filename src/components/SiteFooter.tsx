@@ -1,36 +1,40 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
-const COLUMNS = [
-  {
-    title: "Producto",
-    links: [
-      { label: "Cómo funciona", href: "/" },
-      { label: "Banco de voces", href: "/voces" },
-      { label: "Planes y créditos", href: "/planes" },
-      { label: "Canal de YouTube", href: "/#youtube" },
-    ],
-  },
-  {
-    title: "Cuenta",
-    links: [
-      { label: "Entrar", href: "/acceso" },
-      { label: "Crear cuenta", href: "/acceso?modo=crear" },
-      { label: "Mi biblioteca", href: "/biblioteca" },
-      { label: "Mi perfil", href: "/perfil" },
-    ],
-  },
-  {
-    title: "Legal",
-    links: [
-      { label: "Términos y condiciones", href: "/terminos" },
-      { label: "Privacidad", href: "/terminos#datos" },
-      { label: "hola@omtana.com", href: "mailto:hola@omtana.com" },
-    ],
-  },
-];
+export async function SiteFooter() {
+  const t = copy(await getLang()).footer;
 
-export function SiteFooter() {
+  const columns = [
+    {
+      title: t.columns.product,
+      links: [
+        { label: t.links.howItWorks, href: "/" },
+        { label: t.links.voices, href: "/voces" },
+        { label: t.links.plans, href: "/planes" },
+        { label: t.links.youtube, href: "/#youtube" },
+      ],
+    },
+    {
+      title: t.columns.account,
+      links: [
+        { label: t.links.signIn, href: "/acceso" },
+        { label: t.links.signUp, href: "/acceso?modo=crear" },
+        { label: t.links.library, href: "/biblioteca" },
+        { label: t.links.profile, href: "/perfil" },
+      ],
+    },
+    {
+      title: t.columns.legal,
+      links: [
+        { label: t.terms, href: "/terminos" },
+        { label: t.privacy, href: "/terminos#datos" },
+        { label: "hola@omtana.com", href: "mailto:hola@omtana.com" },
+      ],
+    },
+  ];
+
   return (
     <footer className="mt-24 border-t border-line bg-sand-deep">
       <div className="om-shell grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-10 pb-10 pt-14">
@@ -42,12 +46,10 @@ export function SiteFooter() {
             height={17}
             className="mb-4 block h-[17px] w-auto"
           />
-          <p className="max-w-[30ch] text-[14px] leading-[1.6] text-muted-soft">
-            Meditaciones generadas a partir de tu intención. Santiago, Chile.
-          </p>
+          <p className="max-w-[30ch] text-[14px] leading-[1.6] text-muted-soft">{t.tagline}</p>
         </div>
 
-        {COLUMNS.map((col) => (
+        {columns.map((col) => (
           <div key={col.title}>
             <div className="mb-4 text-[12px] uppercase tracking-[0.18em] text-faint">
               {col.title}
@@ -64,10 +66,10 @@ export function SiteFooter() {
       </div>
 
       <div className="om-shell flex flex-wrap gap-5 pb-12 text-[14px] text-faint">
-        <span>© 2026 Omtana</span>
-        <Link href="/terminos" className="text-faint hover:text-ink">Términos y condiciones</Link>
-        <Link href="/terminos#datos" className="text-faint hover:text-ink">Privacidad</Link>
-        <span className="ml-auto">Español · English · Português</span>
+        <span>{t.copyright}</span>
+        <Link href="/terminos" className="text-faint hover:text-ink">{t.terms}</Link>
+        <Link href="/terminos#datos" className="text-faint hover:text-ink">{t.privacy}</Link>
+        <span className="ml-auto">{t.languages}</span>
       </div>
     </footer>
   );

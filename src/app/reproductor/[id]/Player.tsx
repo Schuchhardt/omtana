@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LiveWave } from "@/components/LiveWave";
 import { formatClock } from "@/lib/format";
+import type { Copy } from "@/lib/i18n";
 import type { Cue, MeditationSegment } from "@/lib/types";
 
 interface Props {
@@ -16,9 +17,11 @@ interface Props {
   segments: MeditationSegment[];
   cues: Cue[];
   owned: boolean;
+  t: Copy["player"];
 }
 
 export function Player(props: Props) {
+  const t = props.t;
   const audio = useRef<HTMLAudioElement>(null);
   const reported = useRef(false);
 
@@ -81,7 +84,7 @@ export function Player(props: Props) {
     };
   }, [report]);
 
-  const phase = phaseLabel(props.segments, elapsed, duration);
+  const phase = phaseLabel(t, props.segments, elapsed, duration);
   const keyword = currentCue(props.cues, elapsed);
   const progress = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
 
@@ -111,7 +114,7 @@ export function Player(props: Props) {
 
       <div className="relative flex w-full max-w-[760px] flex-col items-center">
         <p className="mb-4 text-[13px] uppercase tracking-[0.2em] text-faint">
-          {status === "ready" ? phase : "Generando"}
+          {status === "ready" ? phase : t.generating}
         </p>
         <h1 className="mb-[10px] text-center text-[clamp(28px,4.2vw,44px)] font-light">
           {title}
@@ -123,20 +126,20 @@ export function Player(props: Props) {
         {status === "failed" ? (
           <div className="om-card max-w-[46ch] px-7 py-8 text-center">
             <p className="mb-4 text-[17px] leading-[1.6] text-ink-soft">
-              {error ?? "La generación falló."}
+              {error ?? t.failedFallback}
             </p>
             <p className="mb-6 text-[14px] text-faint">
-              Te devolvimos la personalización. Puedes volver a intentarlo.
+              {t.refundNote}
             </p>
             <Link href="/personalizar" className="om-btn om-btn-solid">
-              Ajustar y reintentar
+              {t.retryCta}
             </Link>
           </div>
         ) : status !== "ready" ? (
           <div className="flex flex-col items-center">
             <LiveWave audio={audio} playing />
-            <p className="mt-6 text-[17px] text-muted">{step ?? "Preparando la sesión"}…</p>
-            <p className="mt-2 text-[14px] text-faint">Lista en menos de un minuto</p>
+            <p className="mt-6 text-[17px] text-muted">{step ?? t.preparing}…</p>
+            <p className="mt-2 text-[14px] text-faint">{t.readyNote}</p>
           </div>
         ) : (
           <>
@@ -172,7 +175,7 @@ export function Player(props: Props) {
               <button
                 type="button"
                 onClick={() => seek(-15)}
-                aria-label="Retroceder 15 segundos"
+                aria-label={t.back15}
                 className="h-[52px] w-[52px] cursor-pointer rounded-full border border-line-pill bg-transparent text-[13px] text-ink-soft hover:border-clay-tint"
               >
                 −15
@@ -180,7 +183,7 @@ export function Player(props: Props) {
               <button
                 type="button"
                 onClick={toggle}
-                aria-label={playing ? "Pausar" : "Reproducir"}
+                aria-label={playing ? t.pause : t.play}
                 className="flex h-[76px] w-[76px] cursor-pointer items-center justify-center rounded-full border-none bg-ink text-[20px] text-sand"
               >
                 {playing ? "❚❚" : "▶"}
@@ -188,7 +191,7 @@ export function Player(props: Props) {
               <button
                 type="button"
                 onClick={() => seek(15)}
-                aria-label="Avanzar 15 segundos"
+                aria-label={t.forward15}
                 className="h-[52px] w-[52px] cursor-pointer rounded-full border border-line-pill bg-transparent text-[13px] text-ink-soft hover:border-clay-tint"
               >
                 +15
@@ -198,14 +201,14 @@ export function Player(props: Props) {
             <div className="flex flex-wrap justify-center gap-[10px]">
               {props.owned && (
                 <Link href="/biblioteca" className="om-btn om-btn-ghost om-btn-sm">
-                  Ver en mi biblioteca
+                  {t.viewInLibrary}
                 </Link>
               )}
               <Link href="/voces" className="om-btn om-btn-ghost om-btn-sm">
-                Cambiar de voz
+                {t.changeVoice}
               </Link>
               <Link href="/personalizar" className="om-btn om-btn-ghost om-btn-sm">
-                Generar otra
+                {t.generateAnother}
               </Link>
             </div>
 
@@ -236,15 +239,20 @@ export function Player(props: Props) {
   );
 }
 
-function phaseLabel(segments: MeditationSegment[], elapsed: number, total: number): string {
+function phaseLabel(
+  t: Copy["player"],
+  segments: MeditationSegment[],
+  elapsed: number,
+  total: number,
+): string {
   const active = [...segments]
     .reverse()
     .find((s) => elapsed >= s.start_offset_seconds);
 
-  if (!active) return "Respiración guiada";
-  if (active.position === 0) return "Respiración guiada";
-  if (elapsed > total - 90) return "Cierre";
-  return active.kind === "dynamic" ? "Tu tramo" : "Cuerpo de la meditación";
+  if (!active) return t.phaseBreathing;
+  if (active.position === 0) return t.phaseBreathing;
+  if (elapsed > total - 90) return t.phaseClosing;
+  return active.kind === "dynamic" ? t.phaseYourSegment : t.phaseBody;
 }
 
 function currentCue(cues: Cue[], elapsed: number): string | null {

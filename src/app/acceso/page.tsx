@@ -4,8 +4,12 @@ import type { Metadata } from "next";
 import { AuthForm } from "./AuthForm";
 import { BreathCircle } from "@/components/BreathCircle";
 import { currentUser } from "@/lib/auth";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
-export const metadata: Metadata = { title: "Acceso" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: copy(await getLang()).meta.titles.access };
+}
 
 export default async function AccesoPage({
   searchParams,
@@ -14,12 +18,14 @@ export default async function AccesoPage({
 }) {
   if (await currentUser()) redirect("/home");
 
-  const { modo } = await searchParams;
+  const [{ modo }, lang] = await Promise.all([searchParams, getLang()]);
   const mode = modo === "crear" ? "crear" : "entrar";
+  const t = copy(lang).access;
+
 
   return (
     <main className="om-shell grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-center gap-16 pb-24 pt-16">
-      <AuthForm mode={mode} />
+      <AuthForm mode={mode} t={t} />
 
       <div className="w-full max-w-[460px] justify-self-center">
         <BreathCircle>
@@ -31,9 +37,7 @@ export default async function AccesoPage({
               height={56}
               className="block h-14 w-14"
             />
-            <p className="text-[22px] font-light leading-[1.5] text-ink-soft">
-              Solo pedimos lo que hace falta para que tu biblioteca te siga.
-            </p>
+            <p className="text-[22px] font-light leading-[1.5] text-ink-soft">{t.aside}</p>
           </div>
         </BreathCircle>
       </div>

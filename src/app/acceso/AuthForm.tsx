@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { login, signup, type AuthState } from "./actions";
+import type { Copy } from "@/lib/i18n";
 
 const EMPTY: AuthState = {};
 
-export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
+export function AuthForm({ mode, t }: { mode: "crear" | "entrar"; t: Copy["access"] }) {
   const isSignup = mode === "crear";
   const [state, action, pending] = useActionState(isSignup ? signup : login, EMPTY);
 
@@ -18,31 +19,29 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
           data-active={!isSignup}
           className="om-pill border-transparent data-[active=true]:border-ink"
         >
-          Entrar
+          {t.tabSignIn}
         </Link>
         <Link
           href="/acceso?modo=crear"
           data-active={isSignup}
           className="om-pill border-transparent data-[active=true]:border-ink"
         >
-          Crear cuenta
+          {t.tabSignUp}
         </Link>
       </div>
 
       <h1 className="mb-3 text-[clamp(28px,4vw,40px)]">
-        {isSignup ? "Tu biblioteca empieza acá" : "Bienvenido de vuelta"}
+        {isSignup ? t.titleSignUp : t.titleSignIn}
       </h1>
       <p className="mb-[34px] max-w-[44ch] text-[17px] leading-[1.6] text-muted">
-        {isSignup
-          ? "Creamos la cuenta para que lo que generes te siga. El catálogo público no necesita cuenta."
-          : "Entra para volver a tu biblioteca y a tus personalizaciones del mes."}
+        {isSignup ? t.bodySignUp : t.bodySignIn}
       </p>
 
       <form action={action} className="flex max-w-[420px] flex-col gap-4">
         {isSignup && (
           <div>
             <label htmlFor="name" className="mb-2 block text-[14px] text-muted">
-              Nombre
+              {t.labelName}
             </label>
             <input
               id="name"
@@ -50,7 +49,7 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
               required
               maxLength={80}
               autoComplete="name"
-              placeholder="Cómo quieres que te llamemos"
+              placeholder={t.placeholderName}
               className="om-field"
             />
           </div>
@@ -58,7 +57,7 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
 
         <div>
           <label htmlFor="email" className="mb-2 block text-[14px] text-muted">
-            Correo
+            {t.labelEmail}
           </label>
           <input
             id="email"
@@ -66,14 +65,14 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
             type="email"
             required
             autoComplete="email"
-            placeholder="tu@correo.com"
+            placeholder={t.placeholderEmail}
             className="om-field"
           />
         </div>
 
         <div>
           <label htmlFor="password" className="mb-2 block text-[14px] text-muted">
-            Contraseña
+            {t.labelPassword}
           </label>
           <input
             id="password"
@@ -82,7 +81,7 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
             required
             minLength={isSignup ? 8 : undefined}
             autoComplete={isSignup ? "new-password" : "current-password"}
-            placeholder={isSignup ? "Mínimo 8 caracteres" : "Tu contraseña"}
+            placeholder={isSignup ? t.placeholderPasswordSignUp : t.placeholderPasswordSignIn}
             className="om-field"
           />
         </div>
@@ -96,8 +95,9 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
               className="mt-[3px] h-4 w-4 accent-clay"
             />
             <span>
-              Acepto los <Link href="/terminos">términos y condiciones</Link> y el uso de
-              mis intenciones para generar meditaciones.
+              {t.termsBefore}
+              <Link href="/terminos">{t.termsLink}</Link>
+              {t.termsAfter}
             </span>
           </label>
         )}
@@ -111,17 +111,15 @@ export function AuthForm({ mode }: { mode: "crear" | "entrar" }) {
         <button type="submit" disabled={pending} className="om-btn om-btn-solid mt-1.5 w-full py-4">
           {pending
             ? isSignup
-              ? "Creando tu cuenta…"
-              : "Entrando…"
+              ? t.pendingSignUp
+              : t.pendingSignIn
             : isSignup
-              ? "Crear cuenta gratis"
-              : "Entrar"}
+              ? t.submitSignUp
+              : t.submitSignIn}
         </button>
 
         <p className="mt-1.5 text-[14px] text-faint">
-          {isSignup
-            ? "Solo correo y contraseña. No pedimos tarjeta para el plan Free."
-            : "¿Olvidaste la contraseña? Escríbenos a hola@omtana.com."}
+          {isSignup ? t.noteSignUp : t.noteSignIn}
         </p>
       </form>
     </div>

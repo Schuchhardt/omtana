@@ -1,32 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { savePreferences } from "./actions";
 import { DURATIONS, LOCALES } from "@/lib/config";
+import type { Copy } from "@/lib/i18n";
 import type { UserPrefs, Voice } from "@/lib/types";
 
-const TOGGLES: { key: keyof UserPrefs; label: string; note: string }[] = [
-  {
-    key: "daily_reminder",
-    label: "Recordatorio diario",
-    note: "Un aviso a las 21:00 para tu sesión de la noche.",
-  },
-  {
-    key: "voice_emails",
-    label: "Correos sobre voces nuevas",
-    note: "Cuando se suma un actor al banco.",
-  },
-  {
-    key: "publish_by_default",
-    label: "Publicar por defecto",
-    note: "Todo lo que generes queda público salvo que lo cambies.",
-  },
-  {
-    key: "improve_service",
-    label: "Usar mis sesiones para mejorar el servicio",
-    note: "Datos agregados, sin el texto de tu contexto.",
-  },
+const TOGGLE_KEYS: (keyof UserPrefs)[] = [
+  "daily_reminder",
+  "voice_emails",
+  "publish_by_default",
+  "improve_service",
 ];
 
 export function Preferences({
@@ -35,13 +21,16 @@ export function Preferences({
   defaultDuration,
   prefs,
   voices,
+  t,
 }: {
   locale: string;
   defaultVoiceId: string | null;
   defaultDuration: number;
   prefs: UserPrefs;
   voices: Voice[];
+  t: Copy["profile"];
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [state, setState] = useState({ locale, defaultVoiceId, defaultDuration, prefs });
@@ -58,6 +47,9 @@ export function Preferences({
         prefs: next.prefs,
       });
       setSaved(true);
+      // Elegir idioma acá también cambia el de la interfaz, y esa copia se arma
+      // en el servidor: hay que volver a pedir el árbol.
+      if (patch.locale) router.refresh();
     });
   }
 
@@ -67,15 +59,15 @@ export function Preferences({
     <div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-[14px]">
       <div className="om-card px-7 py-[30px]">
         <div className="om-label mb-6 flex items-center justify-between">
-          <span>Preferencias</span>
+          <span>{t.preferences}</span>
           <span className="text-[12px] normal-case tracking-normal text-faint">
-            {pending ? "Guardando…" : saved ? "Guardado" : ""}
+            {pending ? t.saving : saved ? t.saved : ""}
           </span>
         </div>
 
         <div className="flex flex-col gap-[22px]">
           <div>
-            <div className="mb-[10px] text-[15px] text-muted">Idioma de la aplicación</div>
+            <div className="mb-[10px] text-[15px] text-muted">{t.appLanguage}</div>
             <div className="flex flex-wrap gap-2">
               {LOCALES.map((l) => (
                 <button
@@ -89,15 +81,18 @@ export function Preferences({
                 </button>
               ))}
             </div>
+            {state.locale === "pt" && (
+              <p className="mt-2 text-[13px] leading-[1.5] text-faint">{t.portugueseNote}</p>
+            )}
           </div>
 
           <div>
-            <div className="mb-[10px] text-[15px] text-muted">Voz por defecto</div>
+            <div className="mb-[10px] text-[15px] text-muted">{t.defaultVoice}</div>
             <div className="flex items-center gap-[14px] rounded-card border border-line px-4 py-[14px]">
               <span className="h-[34px] w-[34px] flex-none rounded-full bg-clay-pale" aria-hidden="true" />
-              <span className="mr-auto text-[16px]">{voice?.name ?? "Sin elegir"}</span>
+              <span className="mr-auto text-[16px]">{voice?.name ?? t.noVoiceChosen}</span>
               <Link href="/voces" className="text-[14px] text-clay">
-                Ver banco
+                {t.viewBank}
               </Link>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -116,7 +111,7 @@ export function Preferences({
           </div>
 
           <div>
-            <div className="mb-[10px] text-[15px] text-muted">Duración habitual</div>
+            <div className="mb-[10px] text-[15px] text-muted">{t.usualDuration}</div>
             <div className="flex flex-wrap gap-2">
               {DURATIONS.map((d) => (
                 <button
@@ -135,26 +130,29 @@ export function Preferences({
       </div>
 
       <div className="om-card px-7 py-[30px]">
-        <div className="om-label mb-6">Cuenta y datos</div>
+        <div className="om-label mb-6">{t.accountAndData}</div>
 
         <div className="flex flex-col">
-          {TOGGLES.map((t, i) => {
-            const on = state.prefs[t.key];
+          {TOGGLE_KEYS.map((key, i) => {
+            const on = state.prefs[key];
+            const toggle = t.toggles[key];
             return (
               <div
-                key={t.key}
+                key={key}
                 className={`flex items-center py-4 ${i ? "border-t border-line-hair" : ""}`}
               >
                 <div className="mr-auto pr-[18px]">
-                  <div className="text-[16px]">{t.label}</div>
-                  <div className="mt-[3px] text-[13px] leading-[1.5] text-faint">{t.note}</div>
+                  <div className="text-[16px]">{toggle.label}</div>
+                  <div className="mt-[3px] text-[13px] leading-[1.5] text-faint">
+                    {toggle.note}
+                  </div>
                 </div>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={on}
-                  aria-label={t.label}
-                  onClick={() => update({ prefs: { ...state.prefs, [t.key]: !on } })}
+                  aria-label={toggle.label}
+                  onClick={() => update({ prefs: { ...state.prefs, [key]: !on } })}
                   className={`flex h-[26px] w-[46px] flex-none cursor-pointer rounded-full border-none p-[3px] transition-colors ${
                     on ? "justify-end bg-clay" : "justify-start bg-line-pill"
                   }`}
@@ -170,21 +168,21 @@ export function Preferences({
 
         <div className="flex flex-col items-start gap-[14px]">
           <Link href="/terminos" className="text-[15px] text-ink-soft hover:text-clay">
-            Términos y privacidad
+            {t.termsLink}
           </Link>
           <form action="/api/auth/logout" method="post">
             <button type="submit" className="cursor-pointer text-[15px] text-ink-soft hover:text-clay">
-              Cerrar sesión
+              {t.signOut}
             </button>
           </form>
-          <DeleteAccount />
+          <DeleteAccount t={t} />
         </div>
       </div>
     </div>
   );
 }
 
-function DeleteAccount() {
+function DeleteAccount({ t }: { t: Copy["profile"] }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -195,17 +193,14 @@ function DeleteAccount() {
         onClick={() => setConfirming(true)}
         className="cursor-pointer text-[15px] text-danger"
       >
-        Eliminar cuenta y datos
+        {t.deleteAccount}
       </button>
     );
   }
 
   return (
     <div className="w-full rounded-card border border-danger/40 px-4 py-4">
-      <p className="mb-3 text-[15px] leading-[1.55] text-ink-soft">
-        Se borra tu biblioteca y tus datos. Lo que publicaste se queda en el catálogo, sin
-        tu nombre. No se puede deshacer.
-      </p>
+      <p className="mb-3 text-[15px] leading-[1.55] text-ink-soft">{t.deleteWarning}</p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -218,14 +213,14 @@ function DeleteAccount() {
           }
           className="om-btn om-btn-sm border-danger bg-danger text-white"
         >
-          {pending ? "Eliminando…" : "Sí, eliminar todo"}
+          {pending ? t.deleting : t.deleteConfirm}
         </button>
         <button
           type="button"
           onClick={() => setConfirming(false)}
           className="om-btn om-btn-ghost om-btn-sm"
         >
-          Cancelar
+          {t.cancel}
         </button>
       </div>
     </div>

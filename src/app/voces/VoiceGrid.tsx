@@ -3,30 +3,50 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { Wave } from "@/components/Wave";
+import { fill, localized, voiceGender, voiceTone, type Copy, type UiLang } from "@/lib/i18n";
 import type { Voice } from "@/lib/types";
 
-const FILTERS = [
-  { id: "Todas", match: () => true },
-  { id: "Español", match: (v: Voice) => v.languages.includes("es") },
-  { id: "English", match: (v: Voice) => v.languages.includes("en") },
-  { id: "Português", match: (v: Voice) => v.languages.includes("pt") },
-  { id: "Femenina", match: (v: Voice) => v.gender === "Femenina" },
-  { id: "Masculina", match: (v: Voice) => v.gender === "Masculina" },
-  { id: "Grave", match: (v: Voice) => v.tone === "Grave" },
+/**
+ * Los filtros comparan contra los valores tal como están en la base, que están
+ * en español; solo el rótulo cambia de idioma. Así el filtro elegido sigue
+ * valiendo cuando alguien cambia de idioma a media página.
+ */
+const FILTERS: { id: string; match: (v: Voice) => boolean }[] = [
+  { id: "all", match: () => true },
+  { id: "es", match: (v) => v.languages.includes("es") },
+  { id: "en", match: (v) => v.languages.includes("en") },
+  { id: "pt", match: (v) => v.languages.includes("pt") },
+  { id: "female", match: (v) => v.gender === "Femenina" },
+  { id: "male", match: (v) => v.gender === "Masculina" },
+  { id: "deep", match: (v) => v.tone === "Grave" },
 ];
 
 export function VoiceGrid({
   voices,
   selectedId,
   returnTo,
+  lang,
+  t,
 }: {
   voices: Voice[];
   selectedId: string | null;
   returnTo: string | null;
+  lang: UiLang;
+  t: Copy["voices"];
 }) {
-  const [filter, setFilter] = useState("Todas");
+  const [filter, setFilter] = useState("all");
   const [sampling, setSampling] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
+
+  const labels: Record<string, string> = {
+    all: t.filterAll,
+    es: "Español",
+    en: "English",
+    pt: "Português",
+    female: t.filterFemale,
+    male: t.filterMale,
+    deep: t.filterDeep,
+  };
 
   const active = FILTERS.find((f) => f.id === filter) ?? FILTERS[0];
   const shown = voices.filter(active.match);
@@ -63,7 +83,7 @@ export function VoiceGrid({
             aria-pressed={filter === f.id}
             className="om-pill"
           >
-            {f.id}
+            {labels[f.id]}
           </button>
         ))}
       </div>
@@ -79,7 +99,9 @@ export function VoiceGrid({
                 <span className="h-12 w-12 flex-none rounded-full bg-clay-pale" aria-hidden="true" />
                 <div className="mr-auto min-w-0">
                   <div className="text-[19px]">{v.name}</div>
-                  <div className="mt-0.5 text-[14px] text-muted-soft">{v.accent}</div>
+                  <div className="mt-0.5 text-[14px] text-muted-soft">
+                    {localized(v, lang, "accent")}
+                  </div>
                 </div>
                 <span
                   className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-[11px] ${
@@ -91,16 +113,20 @@ export function VoiceGrid({
               </div>
 
               <p className="mb-[18px] min-h-[46px] text-[15px] leading-[1.55] text-muted">
-                {v.blurb}
+                {localized(v, lang, "blurb")}
               </p>
 
               <div className="mb-5 flex flex-wrap gap-1.5">
-                {[v.gender, v.tone, v.languages.join(" · ").toUpperCase()].map((t) => (
+                {[
+                  voiceGender(lang, v.gender),
+                  voiceTone(lang, v.tone),
+                  v.languages.join(" · ").toUpperCase(),
+                ].map((tag) => (
                   <span
-                    key={t}
+                    key={tag}
                     className="rounded-full border border-line px-[11px] py-1 text-[13px] text-muted"
                   >
-                    {t}
+                    {tag}
                   </span>
                 ))}
               </div>
@@ -113,7 +139,7 @@ export function VoiceGrid({
                     playSample(v);
                   }}
                   disabled={!v.sample_url}
-                  aria-label={`Escuchar muestra de ${v.name}`}
+                  aria-label={fill(t.sampleAria, { name: v.name })}
                   className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full border border-line-strong text-[10px] text-ink-soft disabled:opacity-40"
                 >
                   {sampling === v.id ? "❚❚" : "▶"}
@@ -149,9 +175,7 @@ export function VoiceGrid({
       </div>
 
       {shown.length === 0 && (
-        <p className="om-card px-6 py-8 text-[16px] text-muted">
-          Ninguna voz del banco calza con ese filtro todavía.
-        </p>
+        <p className="om-card px-6 py-8 text-[16px] text-muted">{t.emptyFilter}</p>
       )}
     </>
   );

@@ -4,6 +4,8 @@ import { currentUser } from "@/lib/auth";
 import { db } from "@/lib/supabase";
 import { getStripe, stripeConfigured } from "@/lib/stripe";
 import { CREDIT_PACKS, PLAN } from "@/lib/config";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
 const schema = z.object({
   kind: z.enum(["credits", "pro"]),
@@ -11,18 +13,21 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const lang = await getLang();
+  const t = copy(lang).api;
+  const packs = copy(lang).plansPage.creditPacks;
   const user = await currentUser();
-  if (!user) return NextResponse.json({ error: "Necesitas iniciar sesión." }, { status: 401 });
+  if (!user) return NextResponse.json({ error: t.signInRequired }, { status: 401 });
 
   if (!stripeConfigured()) {
     return NextResponse.json(
-      { error: "Los pagos todavía no están configurados. Falta STRIPE_SECRET_KEY." },
+      { error: t.paymentsNotConfigured },
       { status: 503 },
     );
   }
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Solicitud inválida." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
 
   const stripe = getStripe();
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin;
@@ -49,7 +54,7 @@ export async function POST(request: Request) {
   if (parsed.data.kind === "pro") {
     const priceId = process.env.STRIPE_PRICE_PRO;
     if (!priceId) {
-      return NextResponse.json({ error: "Falta STRIPE_PRICE_PRO." }, { status: 503 });
+      return NextResponse.json({ error: t.missingProPrice }, { status: 503 });
     }
     const session = await stripe.checkout.sessions.create({
       ...common,
@@ -61,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   const pack = CREDIT_PACKS.find((p) => p.id === parsed.data.packId);
-  if (!pack) return NextResponse.json({ error: "Ese pack no existe." }, { status: 400 });
+  if (!pack) return NextResponse.json({ error: t.packNotFound }, { status: 400 });
 
   const session = await stripe.checkout.sessions.create({
     ...common,
@@ -73,8 +78,8 @@ export async function POST(request: Request) {
           currency: "usd",
           unit_amount: pack.amountUsd,
           product_data: {
-            name: `Omtana · ${pack.qty}`,
-            description: "Créditos para generar meditaciones personalizadas. No vencen.",
+            name: `Omtana · ${packs[pack.id].qty}`,
+            description: t.stripeCreditsDescription,
           },
         },
       },

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PLAN, CREDITS_PLAN } from "@/lib/config";
+import { copy, type UiLang } from "@/lib/i18n";
 import type { Plan } from "@/lib/types";
 
 interface Card {
@@ -13,33 +14,46 @@ interface Card {
   featured?: boolean;
 }
 
-export function PlanCards({ currentPlan }: { currentPlan: Plan | null }) {
+/**
+ * Los precios y el tope de personalizaciones salen de `config`, que es la
+ * fuente única; los rótulos y las viñetas salen del diccionario, porque son
+ * copia y cambian con el idioma de la interfaz.
+ */
+export function PlanCards({
+  currentPlan,
+  lang = "es",
+}: {
+  currentPlan: Plan | null;
+  lang?: UiLang;
+}) {
+  const t = copy(lang).plans;
+
   const cards: Card[] = [
     {
       id: "free",
-      tag: PLAN.free.tag,
+      tag: t.free.tag,
       price: PLAN.free.price,
-      per: PLAN.free.per,
-      features: PLAN.free.features,
-      cta: currentPlan === "free" ? "Tu plan actual" : "Empezar gratis",
+      per: t.free.per,
+      features: t.free.features,
+      cta: currentPlan === "free" ? t.currentCta : t.free.cta,
       href: currentPlan ? "/home" : "/acceso?modo=crear",
     },
     {
       id: "credits",
-      tag: CREDITS_PLAN.tag,
+      tag: t.credits.tag,
       price: CREDITS_PLAN.price,
-      per: CREDITS_PLAN.per,
-      features: CREDITS_PLAN.features,
-      cta: CREDITS_PLAN.cta,
+      per: t.credits.per,
+      features: t.credits.features,
+      cta: t.credits.cta,
       href: "/planes#creditos",
     },
     {
       id: "pro",
-      tag: PLAN.pro.tag,
+      tag: t.pro.tag,
       price: PLAN.pro.price,
-      per: PLAN.pro.per,
-      features: PLAN.pro.features,
-      cta: currentPlan === "pro" ? "Tu plan actual" : PLAN.pro.cta,
+      per: t.pro.per,
+      features: t.pro.features,
+      cta: currentPlan === "pro" ? t.currentCta : t.pro.cta,
       href: "/planes#pro",
       featured: true,
     },
@@ -62,7 +76,7 @@ export function PlanCards({ currentPlan }: { currentPlan: Plan | null }) {
               </span>
               {isCurrent && (
                 <span className="rounded-full border border-line px-[9px] py-[2px] text-[12px] text-clay">
-                  Actual
+                  {t.currentBadge}
                 </span>
               )}
             </div>

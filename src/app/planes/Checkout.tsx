@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { CREDIT_PACKS } from "@/lib/config";
+import type { Copy } from "@/lib/i18n";
 
-export function Checkout({ paymentsEnabled }: { paymentsEnabled: boolean }) {
+export function Checkout({
+  paymentsEnabled,
+  t,
+}: {
+  paymentsEnabled: boolean;
+  t: Copy["plansPage"];
+}) {
   const [pack, setPack] = useState<string>(CREDIT_PACKS[1].id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +25,7 @@ export function Checkout({ paymentsEnabled }: { paymentsEnabled: boolean }) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok || !body.url) {
-      setError(body.error ?? "No pudimos abrir el pago.");
+      setError(body.error ?? t.checkoutError);
       setBusy(false);
       return;
     }
@@ -27,10 +34,12 @@ export function Checkout({ paymentsEnabled }: { paymentsEnabled: boolean }) {
 
   return (
     <div className="om-card px-7 py-[30px]" id="creditos">
-      <div className="om-label mb-5">Comprar créditos</div>
+      <div className="om-label mb-5">{t.buyCredits}</div>
 
       <div className="mb-5 flex flex-col gap-[10px]">
-        {CREDIT_PACKS.map((p) => (
+        {CREDIT_PACKS.map((p) => {
+          const labels = t.creditPacks[p.id];
+          return (
           <button
             key={p.id}
             type="button"
@@ -41,12 +50,13 @@ export function Checkout({ paymentsEnabled }: { paymentsEnabled: boolean }) {
             }`}
           >
             <span className="mr-auto">
-              <span className="block text-[17px]">{p.qty}</span>
-              <span className="mt-0.5 block text-[13px] text-faint">{p.unit}</span>
+              <span className="block text-[17px]">{labels.qty}</span>
+              <span className="mt-0.5 block text-[13px] text-faint">{labels.unit}</span>
             </span>
             <span className="text-[17px]">{p.price}</span>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {error && (
@@ -61,11 +71,11 @@ export function Checkout({ paymentsEnabled }: { paymentsEnabled: boolean }) {
         disabled={busy || !paymentsEnabled}
         className="om-btn om-btn-solid w-full py-[15px]"
       >
-        {busy ? "Abriendo…" : paymentsEnabled ? "Pagar con Stripe" : "Pagos no configurados"}
+        {busy ? t.opening : paymentsEnabled ? t.payWithStripe : t.paymentsOff}
       </button>
 
       <p className="mt-3 text-center text-[13px] text-faint">
-        Los créditos no vencen. Cada uno es una meditación tuya para siempre.
+        {t.creditsNote}
       </p>
 
       <div className="my-6 h-px bg-line-hair" id="pro" />
@@ -76,10 +86,10 @@ export function Checkout({ paymentsEnabled }: { paymentsEnabled: boolean }) {
         disabled={busy || !paymentsEnabled}
         className="om-btn om-btn-ghost w-full py-[15px]"
       >
-        Pasar a Pro
+        {t.goPro}
       </button>
       <p className="mt-3 text-center text-[13px] text-faint">
-        Generación ilimitada. Se renueva cada mes y se cancela cuando quieras.
+        {t.proNote}
       </p>
     </div>
   );

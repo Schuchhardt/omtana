@@ -1,8 +1,17 @@
 import Link from "next/link";
 import type { Meditation } from "@/lib/types";
 import { formatDuration } from "@/lib/format";
+import type { UiLang } from "@/lib/i18n";
 
-export function MeditationRow({ meditation, meta }: { meditation: Meditation; meta?: string }) {
+export function MeditationRow({
+  meditation,
+  meta,
+  lang = "es",
+}: {
+  meditation: Meditation;
+  meta?: string;
+  lang?: UiLang;
+}) {
   return (
     <Link
       href={`/reproductor/${meditation.id}`}
@@ -14,7 +23,7 @@ export function MeditationRow({ meditation, meta }: { meditation: Meditation; me
       <span className="min-w-0">
         <span className="block truncate text-[17px] text-ink">{meditation.title}</span>
         <span className="mt-[3px] block text-[14px] text-muted-soft">
-          {meta ?? formatDuration(meditation.duration_seconds)}
+          {meta ?? formatDuration(meditation.duration_seconds, lang)}
         </span>
       </span>
     </Link>

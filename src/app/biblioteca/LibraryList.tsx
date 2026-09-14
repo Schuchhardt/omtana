@@ -3,27 +3,40 @@
 import Link from "next/link";
 import { useState } from "react";
 import { formatDate, formatDuration, plays as playsLabel } from "@/lib/format";
+import { fill, type Copy, type UiLang } from "@/lib/i18n";
 import type { Meditation, Visibility } from "@/lib/types";
 
-const FILTERS = ["Todas", "Publicadas", "Privadas"] as const;
+type FilterId = "all" | "published" | "private";
 
 export function LibraryList({
   meditations,
   voiceNames,
+  lang,
+  t,
 }: {
   meditations: Meditation[];
   voiceNames: Record<string, string>;
+  lang: UiLang;
+  t: Copy["library"];
 }) {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("Todas");
+  const [filter, setFilter] = useState<FilterId>("all");
   const [visibility, setVisibility] = useState<Record<string, Visibility>>(
     Object.fromEntries(meditations.map((m) => [m.id, m.visibility])),
   );
   const [busy, setBusy] = useState<string | null>(null);
 
+  // El id del filtro es estable y el rótulo cambia con el idioma, así que el
+  // filtro elegido sobrevive al cambio de idioma.
+  const filters: { id: FilterId; label: string }[] = [
+    { id: "all", label: t.filterAll },
+    { id: "published", label: t.filterPublished },
+    { id: "private", label: t.filterPrivate },
+  ];
+
   const shown = meditations.filter((m) => {
     const v = visibility[m.id];
-    if (filter === "Publicadas") return v === "public";
-    if (filter === "Privadas") return v === "private";
+    if (filter === "published") return v === "public";
+    if (filter === "private") return v === "private";
     return true;
   });
 
@@ -42,16 +55,16 @@ export function LibraryList({
   return (
     <>
       <div className="mb-6 flex flex-wrap gap-[10px]">
-        {FILTERS.map((f) => (
+        {filters.map((f) => (
           <button
-            key={f}
+            key={f.id}
             type="button"
-            onClick={() => setFilter(f)}
-            data-active={filter === f}
-            aria-pressed={filter === f}
+            onClick={() => setFilter(f.id)}
+            data-active={filter === f.id}
+            aria-pressed={filter === f.id}
             className="om-pill"
           >
-            {f}
+            {f.label}
           </button>
         ))}
       </div>
@@ -66,7 +79,7 @@ export function LibraryList({
           >
             <Link
               href={`/reproductor/${m.id}`}
-              aria-label={`Escuchar ${m.title}`}
+              aria-label={fill(t.playAria, { title: m.title })}
               className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full border border-line-strong text-[10px] hover:border-clay"
             >
               ▶
@@ -75,14 +88,15 @@ export function LibraryList({
             <Link href={`/reproductor/${m.id}`} className="min-w-0 flex-1 text-ink hover:text-ink">
               <span className="block truncate text-[17px]">{m.title}</span>
               <span className="mt-[3px] block text-[14px] text-faint">
-                {formatDuration(m.duration_seconds)} ·{" "}
+                {formatDuration(m.duration_seconds, lang)} ·{" "}
                 {m.voice_id ? `${voiceNames[m.voice_id] ?? "Omtana"} · ` : ""}
-                {formatDate(m.created_at)}
-                {m.status !== "ready" && ` · ${m.status === "failed" ? "falló" : "generando"}`}
+                {formatDate(m.created_at, lang)}
+                {m.status !== "ready" &&
+                  ` · ${m.status === "failed" ? t.statusFailed : t.statusGenerating}`}
               </span>
             </Link>
 
-            <span className="flex-none text-[14px] text-faint">{playsLabel(m.plays)}</span>
+            <span className="flex-none text-[14px] text-faint">{playsLabel(m.plays, lang)}</span>
 
             <button
               type="button"
@@ -94,15 +108,13 @@ export function LibraryList({
                   : "border-line text-muted-soft"
               }`}
             >
-              {visibility[m.id] === "public" ? "Pública" : "Privada"}
+              {visibility[m.id] === "public" ? t.public : t.private}
             </button>
           </div>
         ))}
 
         {shown.length === 0 && (
-          <p className="px-[22px] py-8 text-[16px] text-muted">
-            No hay nada con ese filtro.
-          </p>
+          <p className="px-[22px] py-8 text-[16px] text-muted">{t.emptyFilter}</p>
         )}
       </div>
     </>

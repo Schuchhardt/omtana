@@ -4,6 +4,8 @@ import { Player } from "./Player";
 import { currentUser } from "@/lib/auth";
 import { getPlayable } from "@/lib/queries";
 import { signedUrl } from "@/lib/storage";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
 export async function generateMetadata({
   params,
@@ -13,7 +15,7 @@ export async function generateMetadata({
   const { id } = await params;
   const user = await currentUser();
   const found = await getPlayable(id, user?.id ?? null);
-  return { title: found?.meditation.title ?? "Reproductor" };
+  return { title: found?.meditation.title ?? copy(await getLang()).meta.titles.player };
 }
 
 export default async function ReproductorPage({
@@ -23,7 +25,7 @@ export default async function ReproductorPage({
 }) {
   const { id } = await params;
   const user = await currentUser();
-  const found = await getPlayable(id, user?.id ?? null);
+  const [found, lang] = await Promise.all([getPlayable(id, user?.id ?? null), getLang()]);
   if (!found) notFound();
 
   const { meditation, segments, cues, voice } = found;
@@ -42,6 +44,7 @@ export default async function ReproductorPage({
         segments={segments}
         cues={cues}
         owned={meditation.user_id === user?.id}
+        t={copy(lang).player}
       />
     </main>
   );

@@ -48,16 +48,24 @@ export async function getVoice(id: string | null): Promise<Voice | null> {
   return (data as Voice) ?? null;
 }
 
-/** Catálogo público: lo del equipo más lo que la comunidad publicó. */
-export async function listCatalog(limit = 24): Promise<Meditation[]> {
+/**
+ * Catálogo público: lo del equipo más lo que la comunidad publicó.
+ *
+ * `locale` acota al idioma de la meditación, que es el idioma del audio y no
+ * el de la interfaz: son dos ejes distintos y una persona puede querer
+ * escuchar en inglés con la aplicación en español.
+ */
+export async function listCatalog(limit = 24, locale?: string): Promise<Meditation[]> {
   if (!isConfigured()) return [];
-  const { data } = await db()
+  let query = db()
     .from("omtana_meditations")
     .select("*")
     .eq("visibility", "public")
-    .eq("status", "ready")
-    .order("plays", { ascending: false })
-    .limit(limit);
+    .eq("status", "ready");
+
+  if (locale) query = query.eq("locale", locale);
+
+  const { data } = await query.order("plays", { ascending: false }).limit(limit);
   return (data as Meditation[]) ?? [];
 }
 
@@ -122,9 +130,12 @@ export async function getPlayable(
 }
 
 export async function listLedger(userId: string, limit = 8): Promise<LedgerEntry[]> {
+  // `*` y no la lista de columnas: así el historial se sigue leyendo aunque el
+  // código llegue antes que la migración que agrega reason_key/reason_meta.
+  // Las filas sin clave caen al texto guardado en `reason`.
   const { data } = await db()
     .from("omtana_credit_ledger")
-    .select("id, delta, reason, created_at")
+    .select("*")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);

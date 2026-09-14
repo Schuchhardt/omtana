@@ -1,10 +1,13 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase";
 import { destroySession, requireUser } from "@/lib/auth";
+import { getLang } from "@/lib/lang";
+import { copy, normalizeLang, LANG_COOKIE, LANG_COOKIE_MAX_AGE } from "@/lib/i18n";
 
 const prefsSchema = z.object({
   locale: z.enum(["es", "en", "pt"]),
@@ -20,8 +23,10 @@ const prefsSchema = z.object({
 
 export async function savePreferences(input: unknown) {
   const user = await requireUser();
+  const t = copy(await getLang()).profile;
+
   const parsed = prefsSchema.safeParse(input);
-  if (!parsed.success) return { error: "No pudimos guardar esos ajustes." };
+  if (!parsed.success) return { error: t.saveError };
 
   const { error } = await db()
     .from("omtana_users")
@@ -33,9 +38,25 @@ export async function savePreferences(input: unknown) {
     })
     .eq("id", user.id);
 
-  if (error) return { error: "No pudimos guardar esos ajustes." };
+  if (error) return { error: t.saveError };
 
-  revalidatePath("/perfil");
+  // El idioma del perfil manda sobre la cookie del selector de la cabecera; si
+  // no, elegir acá no tendría efecto visible mientras haya cookie puesta.
+  // Portugués no tiene interfaz todavía y la cookie se borra para que caiga en
+  // el idioma del navegador.
+  const store = await cookies();
+  const asUi = normalizeLang(parsed.data.locale);
+  if (asUi) {
+    store.set(LANG_COOKIE, asUi, {
+      path: "/",
+      maxAge: LANG_COOKIE_MAX_AGE,
+      sameSite: "lax",
+    });
+  } else {
+    store.delete(LANG_COOKIE);
+  }
+
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

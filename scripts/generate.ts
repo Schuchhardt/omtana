@@ -131,16 +131,24 @@ async function curated(
     const tag = `[${i + 1}/${jobs.length}] ${job.intention.title} · ${job.duration} min`;
 
     // No repetimos lo que ya existe: --curated se puede correr de nuevo sin costo.
-    const { data: existing } = await db()
+    //
+    // La duración pedida no se puede comparar con `=`: `duration_seconds` guarda
+    // el largo real del audio, que nunca cae justo en el múltiplo de 60 (una
+    // sesión de 5 min termina midiendo 306s). Comparar contra `duration * 60`
+    // dejaba esta rama muerta y cada corrida regeneraba el banco entero. Se
+    // comparan minutos redondeados, que con duraciones de 5 en 5 no es ambiguo.
+    const { data: candidates } = await db()
       .from("omtana_meditations")
-      .select("id")
+      .select("id, duration_seconds")
       .eq("intention_id", job.intention.id)
       .eq("source", "curated")
       .eq("locale", locale)
       .eq("voice_id", voice.id)
-      .eq("duration_seconds", job.duration * 60)
-      .eq("status", "ready")
-      .maybeSingle();
+      .eq("status", "ready");
+
+    const existing = (candidates ?? []).find(
+      (m) => Math.round(m.duration_seconds / 60) === job.duration,
+    );
 
     if (existing) {
       log.info(`${tag} — ya existe, se salta`);

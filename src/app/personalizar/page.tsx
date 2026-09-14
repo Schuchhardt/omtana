@@ -5,8 +5,12 @@ import { Customizer } from "./Customizer";
 import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listMusic, listVoices, remainingFree } from "@/lib/queries";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
-export const metadata: Metadata = { title: "Personalizar" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: copy(await getLang()).meta.titles.customize };
+}
 
 export default async function PersonalizarPage({
   searchParams,
@@ -16,8 +20,9 @@ export default async function PersonalizarPage({
   const user = await currentUser();
   if (!user) redirect("/acceso");
 
-  const params = await searchParams;
-  const intention = params.intencion?.trim() || "Una meditación para hoy";
+  const [params, lang] = await Promise.all([searchParams, getLang()]);
+  const t = copy(lang);
+  const intention = params.intencion?.trim() || t.customize.defaultIntention;
 
   const [voices, music] = await Promise.all([listVoices(), listMusic()]);
 
@@ -31,7 +36,7 @@ export default async function PersonalizarPage({
 
   return (
     <main>
-      <Suspense fallback={<div className="om-shell py-24 text-muted">Cargando…</div>}>
+      <Suspense fallback={<div className="om-shell py-24 text-muted">{t.common.loading}</div>}>
         <Customizer
           intention={intention}
           intentionSlug={params.i ?? null}
@@ -42,6 +47,8 @@ export default async function PersonalizarPage({
           freeLeft={remainingFree(user)}
           credits={user.credits}
           publishByDefault={user.prefs.publish_by_default}
+          lang={lang}
+          t={t.customize}
         />
       </Suspense>
       <SiteFooter />

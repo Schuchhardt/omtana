@@ -3,6 +3,8 @@ import { Jost } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SetupNotice } from "@/components/SetupNotice";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
 const jost = Jost({
   subsets: ["latin"],
@@ -11,22 +13,24 @@ const jost = Jost({
   variable: "--font-jost",
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: {
-    default: "Omtana — Meditaciones generadas",
-    template: "%s · Omtana",
-  },
-  description:
-    "Omtana arma la meditación alrededor de tu caso: guion, voz y música. Cada sesión abre con respiración.",
-  icons: { icon: "/brand/omtana-symbol-black.svg" },
-  openGraph: {
-    title: "Omtana — Meditaciones generadas",
-    description:
-      "No busques la meditación que más se acerque. Dinos qué necesitas hoy.",
-    type: "website",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = copy(await getLang()).meta;
+
+  return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+    title: {
+      default: t.title,
+      template: "%s · Omtana",
+    },
+    description: t.description,
+    icons: { icon: "/brand/omtana-symbol-black.svg" },
+    openGraph: {
+      title: t.title,
+      description: t.ogDescription,
+      type: "website",
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#F6F1E9",
@@ -34,9 +38,11 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const lang = await getLang();
+
   return (
-    <html lang="es" className={jost.variable}>
+    <html lang={lang} className={jost.variable}>
       <body className="min-h-screen font-sans">
         <SetupNotice />
         <SiteHeader />

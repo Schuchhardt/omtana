@@ -44,10 +44,11 @@ export const CREDITS_PLAN = {
   cta: "Comprar créditos",
 } as const;
 
+/** Los rótulos (`qty`, `unit`) viven en el diccionario, indexados por `id`. */
 export const CREDIT_PACKS = [
-  { id: "pack_1", credits: 1, qty: "1 crédito", unit: "una meditación", price: "$3", amountUsd: 300 },
-  { id: "pack_5", credits: 5, qty: "5 créditos", unit: "$2,40 cada una", price: "$12", amountUsd: 1200 },
-  { id: "pack_15", credits: 15, qty: "15 créditos", unit: "$2 cada una", price: "$30", amountUsd: 3000 },
+  { id: "pack_1", credits: 1, price: "$3", amountUsd: 300 },
+  { id: "pack_5", credits: 5, price: "$12", amountUsd: 1200 },
+  { id: "pack_15", credits: 15, price: "$30", amountUsd: 3000 },
 ] as const;
 
 export const DURATIONS = [5, 10, 15, 20] as const;

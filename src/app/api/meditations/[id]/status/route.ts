@@ -2,20 +2,17 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { currentUser } from "@/lib/auth";
 import { signedUrl } from "@/lib/storage";
+import { getLang } from "@/lib/lang";
+import { copy, type Copy } from "@/lib/i18n";
 import type { Meditation } from "@/lib/types";
 
-const STEP_LABEL: Record<string, string> = {
-  plantilla: "Preparando la estructura",
-  "plantilla:guion": "Escribiendo los bloques base",
-  guion: "Escribiendo tu tramo",
-  mezcla: "Mezclando con la música",
-  guardado: "Guardando",
-  listo: "Lista",
-};
-
-function label(step: string): string {
-  if (step.startsWith("voz:") || step.startsWith("plantilla:voz:")) return "Grabando la voz";
-  return STEP_LABEL[step] ?? "Generando";
+/**
+ * El paso viene del job con una clave estable en la base; el rótulo que ve la
+ * persona se arma acá, en su idioma.
+ */
+function label(steps: Copy["player"]["steps"], step: string): string {
+  if (step.startsWith("voz:") || step.startsWith("plantilla:voz:")) return steps.voz;
+  return steps[step] ?? steps.fallback;
 }
 
 export async function GET(
@@ -24,6 +21,9 @@ export async function GET(
 ) {
   const { id } = await params;
   const user = await currentUser();
+  const lang = await getLang();
+  const t = copy(lang).player;
+  const api = copy(lang).api;
 
   const { data } = await db()
     .from("omtana_meditations")
@@ -36,11 +36,11 @@ export async function GET(
     "id" | "user_id" | "visibility" | "status" | "audio_path" | "duration_seconds" | "title"
   > | null;
 
-  if (!meditation) return NextResponse.json({ error: "No existe." }, { status: 404 });
+  if (!meditation) return NextResponse.json({ error: api.notFound }, { status: 404 });
 
   const mine = !!user && meditation.user_id === user.id;
   if (!mine && meditation.visibility !== "public") {
-    return NextResponse.json({ error: "No existe." }, { status: 404 });
+    return NextResponse.json({ error: api.notFound }, { status: 404 });
   }
 
   const { data: job } = await db()
@@ -65,6 +65,7 @@ export async function GET(
         user_id: user.id,
         delta: 1,
         reason: "Devolución por generación fallida",
+        reason_key: "refund_failed",
         meditation_id: id,
       });
       await db()
@@ -77,8 +78,8 @@ export async function GET(
   return NextResponse.json({
     status: meditation.status,
     title: meditation.title,
-    step: job?.step ? label(job.step) : null,
-    error: meditation.status === "failed" ? (job?.error ?? "La generación falló.") : null,
+    step: job?.step ? label(t.steps, job.step) : null,
+    error: meditation.status === "failed" ? (job?.error ?? t.failedFallback) : null,
     durationSeconds: meditation.duration_seconds,
     audioUrl: meditation.status === "ready" ? await signedUrl(meditation.audio_path) : null,
   });

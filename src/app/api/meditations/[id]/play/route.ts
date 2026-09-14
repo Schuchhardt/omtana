@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/supabase";
 import { currentUser } from "@/lib/auth";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
 const schema = z.object({
   secondsListened: z.number().int().min(0).max(60 * 60),
@@ -14,8 +16,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const t = copy(await getLang()).api;
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Valor inválido." }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: t.invalidValue }, { status: 400 });
 
   const user = await currentUser();
 
@@ -25,9 +28,9 @@ export async function POST(
     .eq("id", id)
     .maybeSingle();
 
-  if (!meditation) return NextResponse.json({ error: "No existe." }, { status: 404 });
+  if (!meditation) return NextResponse.json({ error: t.notFound }, { status: 404 });
   if (meditation.visibility !== "public" && meditation.user_id !== user?.id) {
-    return NextResponse.json({ error: "No existe." }, { status: 404 });
+    return NextResponse.json({ error: t.notFound }, { status: 404 });
   }
 
   await db().from("omtana_plays").insert({

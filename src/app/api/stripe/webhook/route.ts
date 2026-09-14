@@ -41,6 +41,7 @@ export async function POST(request: Request) {
           user_id: userId,
           delta: 0,
           reason: "Suscripción Pro activada",
+          reason_key: "pro_activated",
           stripe_ref: session.id,
         });
         break;
@@ -62,6 +63,8 @@ export async function POST(request: Request) {
           user_id: userId,
           delta: credits,
           reason: `Compra de ${credits} crédito${credits === 1 ? "" : "s"}`,
+          reason_key: "credits_purchased",
+          reason_meta: { n: credits },
           stripe_ref: session.id,
         });
       }

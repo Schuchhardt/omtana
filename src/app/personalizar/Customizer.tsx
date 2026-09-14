@@ -5,6 +5,16 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { planSession, planTotals } from "@/lib/session-plan";
 import { DURATIONS, LOCALES, CREDIT_COST_PER_MEDITATION } from "@/lib/config";
+import {
+  copy,
+  fill,
+  plural,
+  sectionLabel,
+  localized,
+  voiceTone,
+  type Copy,
+  type UiLang,
+} from "@/lib/i18n";
 import type { MusicTrack, Voice } from "@/lib/types";
 
 interface Props {
@@ -17,6 +27,8 @@ interface Props {
   freeLeft: number;
   credits: number;
   publishByDefault: boolean;
+  lang: UiLang;
+  t: Copy["customize"];
 }
 
 export function Customizer({
@@ -29,6 +41,8 @@ export function Customizer({
   freeLeft,
   credits,
   publishByDefault,
+  lang,
+  t,
 }: Props) {
   const router = useRouter();
   const params = useSearchParams();
@@ -43,6 +57,7 @@ export function Customizer({
     params.get("visibilidad") ? params.get("visibilidad") === "public" : publishByDefault,
   );
 
+  const minutes = copy(lang).common.minutes;
   const voice = voices.find((v) => v.id === selectedVoiceId) ?? voices[0];
   const sections = useMemo(() => planSession(duration), [duration]);
   const totals = useMemo(() => planTotals(sections), [sections]);
@@ -65,10 +80,10 @@ export function Customizer({
   const blocked = usesCredit && credits <= 0;
   const costLabel =
     plan === "pro"
-      ? "Incluido en Pro"
+      ? t.costPro
       : freeLeft > 0
-        ? `Incluida (te quedan ${freeLeft})`
-        : `${CREDIT_COST_PER_MEDITATION} crédito`;
+        ? fill(t.costIncluded, { n: freeLeft })
+        : plural(t.costCredit, CREDIT_COST_PER_MEDITATION);
 
   function generate() {
     setError(null);
@@ -90,7 +105,7 @@ export function Customizer({
 
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? "No pudimos empezar la generación.");
+        setError(body.error ?? t.errorFallback);
         return;
       }
       router.push(`/reproductor/${body.id}`);
@@ -102,34 +117,34 @@ export function Customizer({
       {/* Columna de ajustes */}
       <div>
         <Link href="/home" className="mb-[22px] block text-[14px] text-muted-soft hover:text-ink">
-          ← Volver al banco
+          {t.back}
         </Link>
-        <p className="om-eyebrow mb-[10px]">Personalizar</p>
+        <p className="om-eyebrow mb-[10px]">{t.eyebrow}</p>
         <h1 className="mb-11 text-[clamp(28px,4vw,40px)]">{intention}</h1>
 
-        <Section label="Tu contexto">
+        <Section label={t.sectionContext}>
           <textarea
             value={context}
             onChange={(e) => setContext(e.target.value)}
             rows={4}
             maxLength={600}
-            placeholder="Cuéntanos lo específico de tu caso."
+            placeholder={t.contextPlaceholder}
             className="om-field resize-y px-5 py-[18px] text-[17px] leading-[1.55]"
           />
           <p className="mt-2 text-[13px] text-faint">
-            Mientras más concreto, más se nota en los tramos personalizados.
+            {t.contextNote}
           </p>
         </Section>
 
-        <Section label="Duración">
+        <Section label={t.sectionDuration}>
           <Pills
-            options={DURATIONS.map((d) => ({ id: String(d), label: `${d} min` }))}
+            options={DURATIONS.map((d) => ({ id: String(d), label: `${d} ${minutes}` }))}
             value={String(duration)}
             onChange={(v) => setDuration(Number(v))}
           />
         </Section>
 
-        <Section label="Idioma de la meditación">
+        <Section label={t.sectionLanguage}>
           <Pills
             options={LOCALES.map((l) => ({ id: l.code, label: l.meditationLabel }))}
             value={locale}
@@ -137,52 +152,52 @@ export function Customizer({
           />
         </Section>
 
-        <Section label="Voz">
+        <Section label={t.sectionVoice}>
           <div className="om-card flex flex-wrap items-center gap-[18px] border-line-field px-[22px] py-[18px]">
             <span className="h-11 w-11 flex-none rounded-full bg-clay-pale" aria-hidden="true" />
             <div className="mr-auto min-w-0">
-              <div className="text-[18px]">{voice?.name ?? "Sin voz"}</div>
+              <div className="text-[18px]">{voice?.name ?? t.noVoice}</div>
               <div className="mt-0.5 text-[14px] text-muted-soft">
-                {voice ? `${voice.accent} · ${voice.tone}` : "Carga el banco de voces"}
+                {voice
+                  ? `${localized(voice, lang, "accent")} · ${voiceTone(lang, voice.tone)}`
+                  : t.loadVoiceBank}
               </div>
             </div>
             <Link href={voicesHref} className="om-btn om-btn-ghost om-btn-sm flex-none">
-              Cambiar
+              {copy(lang).common.change}
             </Link>
           </div>
         </Section>
 
-        <Section label="Música de fondo">
+        <Section label={t.sectionMusic}>
           <Pills
             options={[
               ...music.map((m) => ({ id: m.id, label: m.name })),
-              { id: "", label: "Sin música" },
+              { id: "", label: t.noMusic },
             ]}
             value={musicId}
             onChange={setMusicId}
           />
         </Section>
 
-        <Section label="Al terminar" last>
+        <Section label={t.sectionWhenDone} last>
           <Pills
             options={[
-              { id: "private", label: "Privada" },
-              { id: "public", label: "Publicar" },
+              { id: "private", label: t.optionPrivate },
+              { id: "public", label: t.optionPublish },
             ]}
             value={publish ? "public" : "private"}
             onChange={(v) => setPublish(v === "public")}
           />
           <p className="mt-[10px] text-[13px] text-faint">
-            {publish
-              ? "Queda disponible para la comunidad con tu nombre. Puedes volver a dejarla privada cuando quieras."
-              : "Solo para ti. Nadie más la ve en el catálogo."}
+            {publish ? t.publishNote : t.privateNote}
           </p>
         </Section>
       </div>
 
       {/* Resumen */}
       <aside className="om-card sticky top-[88px] px-7 py-[30px]">
-        <div className="om-label mb-[22px]">Tu sesión</div>
+        <div className="om-label mb-[22px]">{t.summaryTitle}</div>
 
         <div className="mb-[26px] flex flex-col gap-[14px]">
           {sections.map((s) => (
@@ -195,21 +210,21 @@ export function Customizer({
                 }}
               />
               <div className="mr-auto min-w-0">
-                <div className="text-[16px]">{s.label}</div>
+                <div className="text-[16px]">{sectionLabel(lang, s.label)}</div>
                 <div className="text-[13px] text-faint">
-                  {s.kind === "dynamic" ? "Generado para ti" : "Pregenerado"}
+                  {s.kind === "dynamic" ? t.generatedForYou : t.pregenerated}
                 </div>
               </div>
-              <span className="flex-none text-[14px] text-muted">{s.minutes} min</span>
+              <span className="flex-none text-[14px] text-muted">{s.minutes} {minutes}</span>
             </div>
           ))}
         </div>
 
         <div className="mb-[22px] h-px bg-line-hair" />
 
-        <Line label="Tramos personalizados" value={`${totals.dynamicMinutes} min`} />
-        <Line label="Voz" value={voice?.name ?? "—"} />
-        <Line label="Costo" value={costLabel} last />
+        <Line label={t.linePersonalized} value={`${totals.dynamicMinutes} ${minutes}`} />
+        <Line label={t.lineVoice} value={voice?.name ?? "—"} />
+        <Line label={t.lineCost} value={costLabel} last />
 
         {error && (
           <p role="alert" className="mb-3 text-[14px] leading-[1.5] text-danger">
@@ -223,14 +238,14 @@ export function Customizer({
           disabled={pending || blocked || !voice}
           className="om-btn om-btn-solid w-full py-[15px]"
         >
-          {pending ? "Empezando…" : blocked ? "Sin créditos" : "Generar meditación"}
+          {pending ? t.starting : blocked ? t.noCredits : t.generate}
         </button>
 
         <p className="mt-3 text-center text-[13px] text-faint">
           {blocked ? (
-            <Link href="/planes">Compra créditos o pasa a Pro para seguir generando.</Link>
+            <Link href="/planes">{t.blockedLink}</Link>
           ) : (
-            "Lista en menos de un minuto"
+            t.readyNote
           )}
         </p>
       </aside>

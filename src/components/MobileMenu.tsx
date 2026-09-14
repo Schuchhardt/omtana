@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { isActive, type NavItem } from "./NavTabs";
+import { LangSwitch } from "./LangSwitch";
+import type { Copy, UiLang } from "@/lib/i18n";
 
 /**
  * El nav de la cabecera cuando no caben las pestañas.
@@ -12,7 +14,19 @@ import { isActive, type NavItem } from "./NavTabs";
  * partía en tres filas de cabecera pegajosa, un quinto de la pantalla ocupado en
  * todas las vistas. Acá el mismo nav vive detrás de un botón.
  */
-export function MobileMenu({ items, signedIn }: { items: NavItem[]; signedIn: boolean }) {
+export function MobileMenu({
+  items,
+  signedIn,
+  lang,
+  labels,
+  switchLabel,
+}: {
+  items: NavItem[];
+  signedIn: boolean;
+  lang: UiLang;
+  labels: Copy["nav"];
+  switchLabel: string;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -42,7 +56,7 @@ export function MobileMenu({ items, signedIn }: { items: NavItem[]; signedIn: bo
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={open ? "Cerrar menú" : "Abrir menú"}
+        aria-label={open ? labels.closeMenu : labels.openMenu}
         className="-mr-[10px] flex h-11 w-11 flex-none cursor-pointer items-center justify-center rounded-full text-ink lg:hidden"
       >
         <svg
@@ -94,13 +108,15 @@ export function MobileMenu({ items, signedIn }: { items: NavItem[]; signedIn: bo
 
             <div className="my-3 h-px bg-line-hair" />
 
+            <LangSwitch lang={lang} label={switchLabel} className="px-1 pb-2 [&>button]:min-h-[44px] [&>button]:px-3 [&>button]:text-[15px]" />
+
             {signedIn ? (
               <form action="/api/auth/logout" method="post">
                 <button
                   type="submit"
                   className="flex min-h-[48px] w-full cursor-pointer items-center rounded-card px-3 text-left text-[17px] text-muted"
                 >
-                  Salir
+                  {labels.signOut}
                 </button>
               </form>
             ) : (
@@ -109,10 +125,10 @@ export function MobileMenu({ items, signedIn }: { items: NavItem[]; signedIn: bo
                   href="/acceso"
                   className="flex min-h-[48px] items-center rounded-card px-3 text-[17px] text-ink-soft"
                 >
-                  Entrar
+                  {labels.signIn}
                 </Link>
                 <Link href="/acceso?modo=crear" className="om-btn om-btn-solid w-full py-[14px]">
-                  Crear cuenta
+                  {labels.signUp}
                 </Link>
               </div>
             )}

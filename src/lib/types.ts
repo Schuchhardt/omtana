@@ -1,3 +1,5 @@
+import type { LedgerReason, Translatable } from "./i18n";
+
 export type Plan = "free" | "pro";
 export type Visibility = "private" | "public";
 export type MeditationStatus = "pending" | "generating" | "ready" | "failed";
@@ -27,7 +29,7 @@ export interface User {
   created_at: string;
 }
 
-export interface Voice {
+export interface Voice extends Translatable {
   id: string;
   slug: string;
   name: string;
@@ -54,7 +56,7 @@ export interface MusicTrack {
   active: boolean;
 }
 
-export interface Intention {
+export interface Intention extends Translatable {
   id: string;
   slug: string;
   title: string;
@@ -106,9 +108,8 @@ export interface Cue {
   word: string;
 }
 
-export interface LedgerEntry {
+export interface LedgerEntry extends LedgerReason {
   id: string;
   delta: number;
-  reason: string;
   created_at: string;
 }

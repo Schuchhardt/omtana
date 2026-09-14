@@ -5,6 +5,8 @@ import { currentUser } from "@/lib/auth";
 import { remainingFree } from "@/lib/queries";
 import { runGenerationJob } from "@/lib/generation/pipeline";
 import { CREDIT_COST_PER_MEDITATION, PLAN } from "@/lib/config";
+import { getLang } from "@/lib/lang";
+import { copy } from "@/lib/i18n";
 
 export const maxDuration = 300;
 
@@ -20,15 +22,16 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const t = copy(await getLang()).api;
   const user = await currentUser();
   if (!user) {
-    return NextResponse.json({ error: "Necesitas iniciar sesión." }, { status: 401 });
+    return NextResponse.json({ error: t.signInRequired }, { status: 401 });
   }
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Faltan datos para generar la meditación." },
+      { error: t.missingMeditationData },
       { status: 400 },
     );
   }
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
 
   if (usesCredit && user.credits < CREDIT_COST_PER_MEDITATION) {
     return NextResponse.json(
-      { error: "Te quedaste sin personalizaciones y sin créditos." },
+      { error: t.outOfCredits },
       { status: 402 },
     );
   }
@@ -76,7 +79,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error || !meditation) {
-    return NextResponse.json({ error: "No pudimos crear la meditación." }, { status: 500 });
+    return NextResponse.json({ error: t.meditationCreateFailed }, { status: 500 });
   }
 
   // Se cobra al encolar. Si la generación falla, /status devuelve el crédito.
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
       user_id: user.id,
       delta: -1,
       reason: `Personalización incluida en ${PLAN.free.tag}`,
+      reason_key: "free_included",
       meditation_id: meditation.id,
     });
   } else if (usesCredit) {
@@ -100,6 +104,8 @@ export async function POST(request: Request) {
       user_id: user.id,
       delta: -CREDIT_COST_PER_MEDITATION,
       reason: input.intention.slice(0, 90),
+      reason_key: "meditation",
+      reason_meta: { title: input.intention.slice(0, 90) },
       meditation_id: meditation.id,
     });
   }

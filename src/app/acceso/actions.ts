@@ -4,26 +4,36 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/supabase";
 import { createSession, hashPassword, verifyPassword } from "@/lib/auth";
+import { getLang } from "@/lib/lang";
+import { copy, type Copy } from "@/lib/i18n";
 import type { User } from "@/lib/types";
 
 export interface AuthState {
   error?: string;
 }
 
-const email = z.string().trim().toLowerCase().email("Ese correo no parece válido.");
-const password = z.string().min(8, "La contraseña necesita al menos 8 caracteres.");
+/**
+ * Los esquemas se arman por llamada porque los mensajes van en el idioma de
+ * quien está en la pantalla, y ese solo se conoce en la petición.
+ */
+function schemas(t: Copy["access"]["errors"]) {
+  const email = z.string().trim().toLowerCase().email(t.invalidEmail);
+  const password = z.string().min(8, t.shortPassword);
 
-const signupSchema = z.object({
-  name: z.string().trim().min(1, "Falta tu nombre.").max(80),
-  email,
-  password,
-  terms: z.literal("on", { message: "Hay que aceptar los términos para crear la cuenta." }),
-});
-
-const loginSchema = z.object({ email, password: z.string().min(1, "Falta la contraseña.") });
+  return {
+    signup: z.object({
+      name: z.string().trim().min(1, t.missingName).max(80),
+      email,
+      password,
+      terms: z.literal("on", { message: t.mustAcceptTerms }),
+    }),
+    login: z.object({ email, password: z.string().min(1, t.missingPassword) }),
+  };
+}
 
 export async function signup(_prev: AuthState, form: FormData): Promise<AuthState> {
-  const parsed = signupSchema.safeParse(Object.fromEntries(form));
+  const t = copy(await getLang()).access.errors;
+  const parsed = schemas(t).signup.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
@@ -36,7 +46,7 @@ export async function signup(_prev: AuthState, form: FormData): Promise<AuthStat
     .maybeSingle();
 
   if (existing) {
-    return { error: "Ya hay una cuenta con ese correo. Entra en vez de crearla." };
+    return { error: t.emailTaken };
   }
 
   // Voz por defecto: la primera del banco, para que nadie empiece sin voz.
@@ -60,7 +70,7 @@ export async function signup(_prev: AuthState, form: FormData): Promise<AuthStat
     .single();
 
   if (error || !user) {
-    return { error: "No pudimos crear la cuenta. Intenta de nuevo." };
+    return { error: t.createFailed };
   }
 
   await createSession(user.id);
@@ -68,7 +78,8 @@ export async function signup(_prev: AuthState, form: FormData): Promise<AuthStat
 }
 
 export async function login(_prev: AuthState, form: FormData): Promise<AuthState> {
-  const parsed = loginSchema.safeParse(Object.fromEntries(form));
+  const t = copy(await getLang()).access.errors;
+  const parsed = schemas(t).login.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
@@ -84,7 +95,7 @@ export async function login(_prev: AuthState, form: FormData): Promise<AuthState
   // Mismo mensaje en ambos casos: no confirmamos qué correos existen.
   const ok = row ? await verifyPassword(parsed.data.password, row.password_hash) : false;
   if (!row || !ok) {
-    return { error: "Correo o contraseña incorrectos." };
+    return { error: t.badCredentials };
   }
 
   await createSession(row.id);
