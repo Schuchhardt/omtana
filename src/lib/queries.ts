@@ -116,7 +116,7 @@ export async function getVoice(id: string | null): Promise<Voice | null> {
  * el de la interfaz: son dos ejes distintos y una persona puede querer
  * escuchar en inglés con la aplicación en español.
  */
-export async function listCatalog(limit = 24, locale?: string): Promise<Meditation[]> {
+export async function listCatalog(limit = 200, locale?: string): Promise<Meditation[]> {
   if (!isConfigured()) return [];
   let query = db()
     .from("omtana_meditations")
@@ -126,7 +126,13 @@ export async function listCatalog(limit = 24, locale?: string): Promise<Meditati
 
   if (locale) query = query.eq("locale", locale);
 
-  const { data } = await query.order("plays", { ascending: false }).limit(limit);
+  // Las más escuchadas primero; entre las que empatan —y al principio empatan
+  // todas en cero— manda la más nueva, que es lo que hace que una sesión recién
+  // generada aparezca arriba y no perdida al final.
+  const { data } = await query
+    .order("plays", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
   return (data as Meditation[]) ?? [];
 }
 

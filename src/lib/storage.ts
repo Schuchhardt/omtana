@@ -69,3 +69,10 @@ export async function signedUrls(paths: string[]): Promise<(string | null)[]> {
   const byPath = new Map((data ?? []).map((row) => [row.path, row.signedUrl]));
   return paths.map((path) => byPath.get(path) ?? null);
 }
+
+/** Borra archivos del bucket. Lo que no existe se ignora sin ruido. */
+export async function removeAudio(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const { error } = await db().storage.from(AUDIO_BUCKET).remove(paths);
+  if (error) throw new Error(`No se pudieron borrar (${paths.join(", ")}): ${error.message}`);
+}

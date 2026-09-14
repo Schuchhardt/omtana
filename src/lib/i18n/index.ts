@@ -85,6 +85,11 @@ export function voiceTone(lang: UiLang, value: string): string {
   return lookup(COPY[lang].vocab.tone, value);
 }
 
+/** Área de vida del banco de intenciones: `category` en la base. */
+export function areaLabel(lang: UiLang, value: string): string {
+  return lookup(COPY[lang].vocab.areas, value);
+}
+
 
 /* ──────────────────── contenido traducible de la base ──────────────────── */
 

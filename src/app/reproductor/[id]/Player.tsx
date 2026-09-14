@@ -8,7 +8,17 @@ import { formatClock } from "@/lib/format";
 import { fill, type Copy } from "@/lib/i18n";
 import { useMix } from "@/lib/player-mix";
 import type { BreathingStep } from "@/lib/breathing";
-import type { Cue, MeditationSegment } from "@/lib/types";
+import type { Cue, SectionKind } from "@/lib/types";
+
+/** Un tramo de la sesión con su texto, ya rotulado en el idioma de la interfaz. */
+export interface PlayerSection {
+  position: number;
+  kind: SectionKind;
+  label: string;
+  text: string;
+  at: number;
+  seconds: number;
+}
 
 /** Una pista de fondo ya firmada, lista para sonar en el navegador. */
 export interface PlayerTrack {
@@ -26,6 +36,8 @@ export interface PlayerBreathing {
   cycles: number;
   url: string;
   steps: BreathingStep[];
+  /** Lo que dice de corrido: la entrada y el cierre, que es la parte hablada. */
+  script: string;
 }
 
 interface Props {
@@ -35,7 +47,7 @@ interface Props {
   initialStatus: "pending" | "generating" | "ready" | "failed";
   initialAudioUrl: string | null;
   durationSeconds: number;
-  segments: MeditationSegment[];
+  sections: PlayerSection[];
   cues: Cue[];
   tracks: PlayerTrack[];
   breathing: PlayerBreathing[];
@@ -84,7 +96,7 @@ export function Player(props: Props) {
    */
   const [{ voiceVolume, musicVolume, trackId }, setMix] = useMix();
   const [musicOn, setMusicOn] = useState(false);
-  const [panel, setPanel] = useState<"breathing" | "music" | null>(null);
+  const [panel, setPanel] = useState<"breathing" | "music" | "script" | null>(null);
 
   const track = props.tracks.find((x) => x.id === trackId) ?? null;
   const exercise = props.breathing.find((x) => x.id === exerciseId) ?? null;
@@ -238,7 +250,7 @@ export function Player(props: Props) {
     void breath.current?.play().catch(() => undefined);
   }, [exerciseId]);
 
-  const phase = phaseLabel(t, props.segments, elapsed, duration);
+  const phase = phaseLabel(t, props.sections, elapsed, duration);
   const keyword = currentCue(props.cues, elapsed);
 
   /*
@@ -284,6 +296,20 @@ export function Player(props: Props) {
     // Si la meditación todavía no empezó, la respiración nueva vuelve al frente.
     if (id && (audio.current?.currentTime ?? 0) === 0) setBreathingDone(false);
     if (!id) setBreathingDone(true);
+  }
+
+  /**
+   * Saltar a un tramo desde el guion.
+   *
+   * Si todavía está sonando la respiración, la da por hecha: quien busca un
+   * tramo del texto quiere el texto, no volver a empezar por el patrón.
+   */
+  function goTo(at: number) {
+    const el = audio.current;
+    if (!el) return;
+    if (stage === "breathing") startMeditation(playing);
+    el.currentTime = at;
+    setElapsed(at);
   }
 
   /** Tocar la pista que ya está elegida la pausa o la retoma. */
@@ -443,6 +469,12 @@ export function Player(props: Props) {
                     onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
                   />
                 )}
+                <PanelToggle
+                  label={t.scriptTitle}
+                  lit={panel === "script"}
+                  open={panel === "script"}
+                  onClick={() => setPanel((p) => (p === "script" ? null : "script"))}
+                />
               </div>
 
               {panel === "breathing" && (
@@ -451,6 +483,16 @@ export function Player(props: Props) {
                   options={props.breathing}
                   exercise={exercise}
                   onChoose={chooseExercise}
+                />
+              )}
+
+              {panel === "script" && (
+                <ScriptPanel
+                  t={t}
+                  sections={props.sections}
+                  breathing={stage === "breathing" ? exercise : null}
+                  elapsed={stage === "breathing" ? -1 : elapsed}
+                  onSeek={goTo}
                 />
               )}
 
@@ -618,6 +660,78 @@ function BreathingPanel({
   );
 }
 
+/**
+ * El guion de la sesión, tramo por tramo.
+ *
+ * El texto ya venía en la base — es lo que se sintetizó — y no mostrarlo era
+ * esconder de qué está hecha la meditación. Cada tramo lleva su minuto y se
+ * puede saltar ahí, que es lo que se quiere cuando se relee.
+ */
+function ScriptPanel({
+  t,
+  sections,
+  breathing,
+  elapsed,
+  onSeek,
+}: {
+  t: Copy["player"];
+  sections: PlayerSection[];
+  breathing: PlayerBreathing | null;
+  elapsed: number;
+  onSeek: (at: number) => void;
+}) {
+  const active = [...sections].reverse().find((s) => elapsed >= s.at);
+
+  return (
+    <div className="om-card mt-4 max-h-[420px] overflow-y-auto px-6 py-6">
+      <div className="mb-[14px] flex items-center gap-4">
+        <div className="om-label">{t.scriptTitle}</div>
+        <p className="text-[13px] text-faint">{t.scriptNote}</p>
+      </div>
+
+      {breathing && (
+        <div className="mb-5">
+          <div className="mb-1 flex items-baseline gap-3">
+            <span className="text-[15px] text-ink-soft">{breathing.name}</span>
+            <span className="text-[13px] tabular-nums text-faint">
+              {formatClock(breathing.seconds)}
+            </span>
+          </div>
+          <p className="text-[15px] leading-[1.6] text-muted">{breathing.script}</p>
+        </div>
+      )}
+
+      {sections.map((section) => (
+        <div key={section.position} className="mb-5 last:mb-0">
+          <button
+            type="button"
+            onClick={() => onSeek(section.at)}
+            className="mb-1 flex w-full cursor-pointer items-baseline gap-3 border-none bg-transparent p-0 text-left"
+          >
+            <span
+              className="text-[15px]"
+              style={{
+                color:
+                  active?.position === section.position
+                    ? "var(--color-clay)"
+                    : "var(--color-ink-soft)",
+              }}
+            >
+              {section.label}
+            </span>
+            <span className="text-[13px] tabular-nums text-faint">
+              {formatClock(section.at)}
+            </span>
+          </button>
+          <p className="text-[15px] leading-[1.6] text-muted">
+            {section.text || t.scriptEmpty}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface MixerProps {
   t: Copy["player"];
   tracks: PlayerTrack[];
@@ -728,13 +842,11 @@ function clamp(value: number): number {
 
 function phaseLabel(
   t: Copy["player"],
-  segments: MeditationSegment[],
+  sections: PlayerSection[],
   elapsed: number,
   total: number,
 ): string {
-  const active = [...segments]
-    .reverse()
-    .find((s) => elapsed >= s.start_offset_seconds);
+  const active = [...sections].reverse().find((s) => elapsed >= s.at);
 
   if (!active) return t.phaseBody;
   if (elapsed > total - 90) return t.phaseClosing;

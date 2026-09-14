@@ -4,8 +4,10 @@
  *   npm run respiracion -- --listar                     qué hay en el banco y qué está grabado
  *   npm run respiracion -- --guion --ejercicio 4-7-8    la grilla, segundo a segundo, sin gastar nada
  *   npm run respiracion -- --voz aurora                 graba todo lo que le falte a esa voz
+ *   npm run respiracion -- --voz todas                  todo el banco, cada voz en sus idiomas
  *   npm run respiracion -- --voz aurora --ejercicio 4-7-8 --idioma es --hueco 120
  *   npm run respiracion -- --voz aurora --verificar     mide los audios ya grabados
+ *   npm run respiracion -- --limpiar                    borra grabaciones de huecos que ya no existen
  *   npm run respiracion -- --voz aurora --rehacer       rearma aunque ya existan
  *   npm run respiracion -- --voz aurora --regrabar      además vuelve a sintetizar las señales
  *   npm run respiracion -- --voz aurora --guardar tmp   deja una copia local para escucharla
@@ -24,7 +26,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { log, requireEnv, parseArgs, fatal, type Args } from "./_bootstrap";
 import { db } from "../src/lib/supabase";
-import { downloadAudio, ensureBucket, uploadAudio } from "../src/lib/storage";
+import { downloadAudio, ensureBucket, removeAudio, uploadAudio } from "../src/lib/storage";
 import { synthesize } from "../src/lib/generation/tts";
 import { durationOf, ensureFfmpeg, run, FFMPEG_BIN } from "../src/lib/generation/audio";
 import {
@@ -67,71 +69,76 @@ async function main() {
   const args = parseArgs();
 
   const exercises = await loadExercises(args);
-  const locales = pickLocales(args);
   const slots = pickSlots(args);
 
-  if (args.flags.has("guion")) return printScripts(exercises, locales, slots);
+  if (args.flags.has("guion")) return printScripts(exercises, pickLocales(args, null), slots);
   if (args.flags.has("listar")) return listBank(exercises);
   if (args.values.has("pronunciar")) return tryPronunciations(args);
+  if (args.flags.has("limpiar")) return cleanUp();
 
-  const voice = await pickVoice(args);
+  const voices = await pickVoices(args);
   const verifyOnly = args.flags.has("verificar");
   if (!verifyOnly) requireEnv("ELEVENLABS_API_KEY");
 
   await ensureFfmpeg();
   await ensureBucket();
 
-  log.title(`${verifyOnly ? "Verificando" : "Grabando"} · ${voice.name}`);
-
   let done = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const exercise of exercises) {
-    for (const locale of locales) {
-      for (const slot of slots) {
-        const plan = planBreathing(exercise, locale, slot);
-        const tag = `${exercise.slug} · ${locale} · hueco ${slot}s`;
+  for (const voice of voices) {
+    // Cada voz solo en los idiomas que habla: grabar las señales en español con
+    // una voz inglesa da un acento que no se puede arreglar después.
+    const locales = pickLocales(args, voice);
+    log.title(`${verifyOnly ? "Verificando" : "Grabando"} · ${voice.name} · ${locales.join(", ")}`);
 
-        if (!plan) {
-          log.info(`${tag} — no entra en el hueco, se salta`);
-          skipped++;
-          continue;
-        }
+    for (const exercise of exercises) {
+      for (const locale of locales) {
+        for (const slot of slots) {
+          const plan = planBreathing(exercise, locale, slot);
+          const tag = `${exercise.slug} · ${locale} · hueco ${slot}s`;
 
-        try {
-          const existing = await findRender(exercise.id, voice.id, locale, slot);
-
-          if (verifyOnly) {
-            if (!existing) {
-              log.warn(`${tag} — no está grabado`);
-              skipped++;
-              continue;
-            }
-            // Para saber si el banco cambió hay que comparar con las mismas
-            // medidas con las que se grabó, no con las estimaciones: si no,
-            // toda grabación con entrada medida parecería desactualizada.
-            const asRecorded =
-              planBreathing(exercise, locale, slot, {
-                lead: existing.steps[0]?.seconds,
-                tail: existing.steps[existing.steps.length - 1]?.seconds,
-              }) ?? plan;
-            await verifyRender(existing, asRecorded, tag, args);
-            done++;
-            continue;
-          }
-
-          if (existing && !args.flags.has("rehacer") && !args.flags.has("regrabar")) {
-            log.info(`${tag} — ya está grabado, se salta`);
+          if (!plan) {
+            log.info(`${tag} — no entra en el hueco, se salta`);
             skipped++;
             continue;
           }
 
-          await renderOne(exercise, voice, locale, slot, plan, tag, args);
-          done++;
-        } catch (err) {
-          failed++;
-          log.fail(`${tag} — ${err instanceof Error ? err.message : String(err)}`);
+          try {
+            const existing = await findRender(exercise.id, voice.id, locale, slot);
+
+            if (verifyOnly) {
+              if (!existing) {
+                log.warn(`${tag} — no está grabado`);
+                skipped++;
+                continue;
+              }
+              // Para saber si el banco cambió hay que comparar con las mismas
+              // medidas con las que se grabó, no con las estimaciones: si no,
+              // toda grabación con entrada medida parecería desactualizada.
+              const asRecorded =
+                planBreathing(exercise, locale, slot, {
+                  lead: existing.steps[0]?.seconds,
+                  tail: existing.steps[existing.steps.length - 1]?.seconds,
+                }) ?? plan;
+              await verifyRender(existing, asRecorded, tag, args);
+              done++;
+              continue;
+            }
+
+            if (existing && !args.flags.has("rehacer") && !args.flags.has("regrabar")) {
+              log.info(`${tag} — ya está grabado, se salta`);
+              skipped++;
+              continue;
+            }
+
+            await renderOne(exercise, voice, locale, slot, plan, tag, args);
+            done++;
+          } catch (err) {
+            failed++;
+            log.fail(`${tag} — ${err instanceof Error ? err.message : String(err)}`);
+          }
         }
       }
     }
@@ -165,14 +172,23 @@ async function loadExercises(args: Args): Promise<BreathingExercise[]> {
   return [found];
 }
 
-function pickLocales(args: Args): string[] {
+function pickLocales(args: Args, voice: Voice | null): string[] {
   const locale = args.values.get("idioma");
-  if (!locale) return ["es"];
+
   if (locale === "todos") return LOCALES.map((l) => l.code);
-  if (!LOCALES.some((l) => l.code === locale)) {
-    fatal(`Idioma inválido: ${locale}. Usa ${LOCALES.map((l) => l.code).join(", ")} o "todos".`);
+  if (locale) {
+    if (!LOCALES.some((l) => l.code === locale)) {
+      fatal(`Idioma inválido: ${locale}. Usa ${LOCALES.map((l) => l.code).join(", ")} o "todos".`);
+    }
+    return [locale];
   }
-  return [locale];
+
+  // Sin `--idioma`: los que la voz declara hablar. Una voz del banco puede
+  // hablar dos, y las señales tienen que existir en los dos.
+  const spoken = (voice?.languages ?? []).filter((code) =>
+    LOCALES.some((l) => l.code === code),
+  );
+  return spoken.length > 0 ? spoken : ["es"];
 }
 
 function pickSlots(args: Args): number[] {
@@ -184,6 +200,17 @@ function pickSlots(args: Args): number[] {
 }
 
 async function pickVoice(args: Args): Promise<Voice> {
+  return (await pickVoices(args))[0];
+}
+
+/**
+ * Las voces a grabar. `--voz todas` recorre el banco entero.
+ *
+ * Las que no están enlazadas con ElevenLabs se saltan con aviso en vez de
+ * cortar la corrida: una voz a medio configurar no debería impedir grabar el
+ * resto del banco.
+ */
+async function pickVoices(args: Args): Promise<Voice[]> {
   const { data } = await db()
     .from("omtana_voices")
     .select("*")
@@ -197,8 +224,18 @@ async function pickVoice(args: Args): Promise<Voice> {
     fatal(
       "Falta la voz.\n" +
         `    npm run respiracion -- --voz ${voices[0]?.slug ?? "aurora"}\n` +
+        `    npm run respiracion -- --voz todas\n` +
         `    Disponibles: ${voices.map((v) => v.slug).join(", ")}`,
     );
+  }
+
+  if (slug === "todas") {
+    const linked = voices.filter((v) => v.provider_voice_id);
+    for (const v of voices.filter((x) => !x.provider_voice_id)) {
+      log.warn(`${v.slug} no está enlazada con ElevenLabs, se salta.`);
+    }
+    if (linked.length === 0) fatal("Ninguna voz está enlazada. Corre: npm run voices:link");
+    return linked;
   }
 
   const voice = voices.find((v) => v.slug === slug);
@@ -208,7 +245,7 @@ async function pickVoice(args: Args): Promise<Voice> {
   if (!voice.provider_voice_id) {
     fatal(`La voz "${voice.name}" no está enlazada con ElevenLabs. Corre: npm run voices:link`);
   }
-  return voice;
+  return [voice];
 }
 
 async function findRender(
@@ -226,6 +263,50 @@ async function findRender(
     .eq("slot_seconds", slot)
     .maybeSingle();
   return (data as BreathingRender) ?? null;
+}
+
+/**
+ * Borra las grabaciones de huecos que la app ya no pide.
+ *
+ * Cuando el hueco de una duración cambia — de 60 a 120 segundos, por ejemplo —
+ * lo grabado para el anterior queda inalcanzable: ninguna sesión lo va a buscar
+ * nunca más, pero sigue ocupando lugar y apareciendo en los listados. Se borra
+ * la fila y los dos archivos, la mezcla y la capa de voz.
+ */
+async function cleanUp() {
+  log.title("Limpiando grabaciones huérfanas");
+
+  const { data } = await db()
+    .from("omtana_breathing_renders")
+    .select("id, slot_seconds, audio_path, exercise:omtana_breathing_exercises(slug), voice:omtana_voices(slug)");
+
+  interface Orphan {
+    id: string;
+    slot_seconds: number;
+    audio_path: string;
+    exercise: { slug: string } | null;
+    voice: { slug: string } | null;
+  }
+
+  const orphans = ((data as unknown as Orphan[]) ?? []).filter(
+    (render) => !SLOTS.includes(render.slot_seconds),
+  );
+
+  if (orphans.length === 0) {
+    log.done("No hay nada huérfano: todo lo grabado corresponde a un hueco vigente.");
+    return;
+  }
+
+  for (const render of orphans) {
+    log.step(
+      `${render.exercise?.slug} · ${render.voice?.slug} · hueco ${render.slot_seconds}s`,
+    );
+    await removeAudio([render.audio_path, render.audio_path.replace(/\.mp3$/, "-voz.mp3")]);
+    await db().from("omtana_breathing_renders").delete().eq("id", render.id);
+    log.info(render.audio_path);
+  }
+
+  log.done(`${orphans.length} borradas.`);
 }
 
 /* ───────────────────────── el guion, sin gastar nada ───────────────────────── */

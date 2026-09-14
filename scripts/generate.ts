@@ -157,9 +157,13 @@ async function curated(
     // sesión de 5 min termina midiendo 306s). Comparar contra `duration * 60`
     // dejaba esta rama muerta y cada corrida regeneraba el banco entero. Se
     // comparan minutos redondeados, que con duraciones de 5 en 5 no es ambiguo.
+    //
+    // Y se le suma el hueco de la respiración, porque desde que esa pista va
+    // aparte `duration_seconds` mide solo el cuerpo: una sesión de diez minutos
+    // guarda ocho, y sin sumarle el hueco no se reconocía nunca a sí misma.
     const { data: candidates } = await db()
       .from("omtana_meditations")
-      .select("id, duration_seconds")
+      .select("id, duration_seconds, breathing_slot_seconds")
       .eq("intention_id", job.intention.id)
       .eq("source", "curated")
       .eq("locale", locale)
@@ -167,7 +171,9 @@ async function curated(
       .eq("status", "ready");
 
     const existing = (candidates ?? []).find(
-      (m) => Math.round(m.duration_seconds / 60) === job.duration,
+      (m) =>
+        Math.round((m.duration_seconds + (m.breathing_slot_seconds ?? 0)) / 60) ===
+        job.duration,
     );
 
     if (existing) {

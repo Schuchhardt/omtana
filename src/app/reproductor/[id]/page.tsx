@@ -1,11 +1,16 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Player, type PlayerBreathing, type PlayerTrack } from "./Player";
+import {
+  Player,
+  type PlayerBreathing,
+  type PlayerSection,
+  type PlayerTrack,
+} from "./Player";
 import { currentUser } from "@/lib/auth";
 import { getPlayable, listBreathingRenders, listMusic } from "@/lib/queries";
 import { signedUrl, signedUrls } from "@/lib/storage";
 import { getLang } from "@/lib/lang";
-import { copy, localized } from "@/lib/i18n";
+import { copy, localized, sectionLabel } from "@/lib/i18n";
 import { breathingSlotSeconds } from "@/lib/breathing";
 
 /** Desde esta versión la respiración va aparte; antes venía dentro del audio. */
@@ -82,9 +87,29 @@ export default async function ReproductorPage({
         cycles: render.cycles,
         url,
         steps: render.steps,
+        // De todo lo que dice, la parte en prosa: la entrada y el cierre. El
+        // conteo no es guion, es la grilla.
+        script: render.timeline
+          .filter((cue) => cue.kind === "lead" || cue.kind === "tail")
+          .map((cue) => cue.text)
+          .join(" "),
       },
     ];
   });
+
+  /*
+   * El guion viaja rotulado en el idioma de la interfaz: los nombres de los
+   * tramos son un vocabulario cerrado que vive en el diccionario, y traducirlos
+   * acá le ahorra al cliente tener que cargarlo entero.
+   */
+  const sections: PlayerSection[] = segments.map((segment) => ({
+    position: segment.position,
+    kind: segment.kind,
+    label: sectionLabel(lang, segment.label),
+    text: segment.script_text,
+    at: segment.start_offset_seconds,
+    seconds: segment.seconds,
+  }));
 
   return (
     <main>
@@ -95,7 +120,7 @@ export default async function ReproductorPage({
         initialStatus={meditation.status}
         initialAudioUrl={audioUrl}
         durationSeconds={meditation.duration_seconds}
-        segments={segments}
+        sections={sections}
         cues={cues}
         tracks={playableTracks}
         breathing={breathing}
