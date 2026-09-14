@@ -5,7 +5,7 @@ import { PlanCards } from "@/components/PlanCards";
 import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listLedger, remainingFree } from "@/lib/queries";
-import { stripeConfigured } from "@/lib/stripe";
+import { paymentsEnabled } from "@/lib/payments";
 import { formatDate } from "@/lib/format";
 import { PLAN } from "@/lib/config";
 import { getLang } from "@/lib/lang";
@@ -22,6 +22,9 @@ export default async function PlanesPage({
 }) {
   const user = await currentUser();
   if (!user) redirect("/acceso");
+  // Sin llaves de Stripe la aplicación entera corre como plan Free: esta página
+  // solo hablaría de cupos y compras que no existen.
+  if (!paymentsEnabled()) redirect("/home");
 
   const [ledger, { pago }, lang] = await Promise.all([
     listLedger(user.id),
@@ -69,7 +72,7 @@ export default async function PlanesPage({
         </div>
 
         <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6">
-          <Checkout paymentsEnabled={stripeConfigured()} t={t} />
+          <Checkout t={t} />
 
           <div className="om-card px-7 py-[30px]">
             <div className="om-label mb-5">{t.ledgerTitle}</div>

@@ -1,6 +1,7 @@
 import "server-only";
 import { db, isConfigured } from "./supabase";
 import { PLAN } from "./config";
+import { paymentsEnabled } from "./payments";
 import type { BreathingExercise } from "./breathing";
 import type {
   BreathingRender,
@@ -225,12 +226,16 @@ export async function userStats(userId: string) {
   };
 }
 
-/** Cuántas personalizaciones le quedan a este usuario, sin comprar nada. */
+/**
+ * Cuántas personalizaciones le quedan a este usuario, sin comprar nada.
+ *
+ * Sin pagos configurados el tope no se aplica: no habría forma de levantarlo.
+ */
 export function remainingFree(user: User): number {
-  if (user.plan === "pro") return Infinity;
+  if (!paymentsEnabled() || user.plan === "pro") return Infinity;
   return Math.max(0, PLAN.free.monthlyCustomizations - user.free_used_period);
 }
 
 export function canGenerate(user: User): boolean {
-  return user.plan === "pro" || remainingFree(user) > 0 || user.credits > 0;
+  return remainingFree(user) > 0 || user.credits > 0;
 }

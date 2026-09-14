@@ -10,7 +10,3 @@ export function getStripe(): Stripe {
   stripe = new Stripe(key);
   return stripe;
 }
-
-export function stripeConfigured(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
-}

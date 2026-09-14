@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/supabase";
 import { currentUser } from "@/lib/auth";
 import { remainingFree } from "@/lib/queries";
+import { paymentsEnabled } from "@/lib/payments";
 import { runGenerationJob } from "@/lib/generation/pipeline";
 import { CREDIT_COST_PER_MEDITATION, PLAN } from "@/lib/config";
 import { breathingSlotSeconds } from "@/lib/breathing";
@@ -38,10 +39,12 @@ export async function POST(request: Request) {
   }
   const input = parsed.data;
 
-  // Pro no descuenta nada; Free gasta primero el cupo del mes y después créditos.
+  // Pro no descuenta nada; Free gasta primero el cupo del mes y después
+  // créditos. Sin pagos configurados no se descuenta nada a nadie.
+  const billing = paymentsEnabled();
   const free = remainingFree(user);
-  const usesFree = user.plan !== "pro" && free > 0;
-  const usesCredit = user.plan !== "pro" && !usesFree;
+  const usesFree = billing && user.plan !== "pro" && free > 0;
+  const usesCredit = billing && user.plan !== "pro" && !usesFree;
 
   if (usesCredit && user.credits < CREDIT_COST_PER_MEDITATION) {
     return NextResponse.json(

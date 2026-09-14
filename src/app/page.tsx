@@ -4,7 +4,6 @@ import { Wave } from "@/components/Wave";
 import { BreathCircle } from "@/components/BreathCircle";
 import { Faq } from "@/components/Faq";
 import { SiteFooter } from "@/components/SiteFooter";
-import { PlanCards } from "@/components/PlanCards";
 import { currentUser } from "@/lib/auth";
 import { planOutline, sectionMinutes } from "@/lib/session-plan";
 import { breathingSlotSeconds } from "@/lib/breathing";
@@ -90,14 +89,6 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Precio */}
-        <section className="mt-24">
-          <p className="om-eyebrow mb-[14px]">{t.pricing.eyebrow}</p>
-          <h2 className="mb-3 text-[clamp(26px,3.4vw,36px)]">{t.pricing.title}</h2>
-          <p className="mb-9 max-w-[54ch] text-[17px] leading-[1.6] text-muted">{t.pricing.body}</p>
-          <PlanCards currentPlan={user?.plan ?? null} lang={lang} />
-        </section>
-
         {/* FAQ */}
         <section className="mt-24 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-12">
           <div>
@@ -135,6 +126,26 @@ export default async function LandingPage() {
             </div>
             <p className="font-mono text-[13px] text-[#8b8074]">{t.youtube.caption}</p>
           </div>
+        </section>
+
+        {/* Cierre */}
+        <section className="mt-24 text-center">
+          <p className="om-eyebrow mb-[14px]">{t.closing.eyebrow}</p>
+          <h2 className="mx-auto mb-4 max-w-[20ch] text-[clamp(26px,3.4vw,36px)]">
+            {t.closing.title}
+          </h2>
+          <p className="mx-auto mb-9 max-w-[52ch] text-[17px] leading-[1.6] text-muted">
+            {t.closing.body}
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <Link href={user ? "/home" : "/acceso?modo=crear"} className="om-btn om-btn-solid">
+              {user ? t.hero.ctaHome : t.hero.ctaSignUp}
+            </Link>
+            <Link href="/catalogo" className="om-btn om-btn-ghost">
+              {t.hero.ctaListen}
+            </Link>
+          </div>
+          <p className="mt-[18px] text-[14px] text-faint">{t.closing.note}</p>
         </section>
       </div>
 

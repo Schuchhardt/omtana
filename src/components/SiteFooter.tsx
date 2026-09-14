@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { paymentsEnabled } from "@/lib/payments";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
@@ -12,7 +13,9 @@ export async function SiteFooter() {
       links: [
         { label: t.links.howItWorks, href: "/" },
         { label: t.links.voices, href: "/voces" },
-        { label: t.links.plans, href: "/planes" },
+        // Sin pagos configurados no hay plan que elegir: la entrada desaparece
+        // en vez de llevar a una página que no ofrece nada.
+        ...(paymentsEnabled() ? [{ label: t.links.plans, href: "/planes" }] : []),
         { label: t.links.youtube, href: "/#youtube" },
       ],
     },

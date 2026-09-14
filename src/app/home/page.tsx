@@ -7,6 +7,7 @@ import { listIntentions, recentForUser, remainingFree } from "@/lib/queries";
 import { IntentionInput } from "@/components/IntentionInput";
 import { MeditationRow } from "@/components/MeditationRow";
 import { SiteFooter } from "@/components/SiteFooter";
+import { paymentsEnabled } from "@/lib/payments";
 import { greeting, formatDuration, formatDate } from "@/lib/format";
 import { PLAN } from "@/lib/config";
 import { getLang } from "@/lib/lang";
@@ -28,8 +29,10 @@ export default async function HomePage() {
 
   const t = copy(lang);
   const left = remainingFree(user);
-  const quota =
-    user.plan === "pro"
+  // Sin pagos no hay tope ni plan que mirar, así que el contador desaparece.
+  const quota = !paymentsEnabled()
+    ? null
+    : user.plan === "pro"
       ? t.home.quotaPro
       : fill(t.home.quotaFree, {
           used: PLAN.free.monthlyCustomizations - left,
@@ -46,12 +49,14 @@ export default async function HomePage() {
             </p>
             <h1 className="text-[clamp(30px,4vw,42px)]">{t.home.title}</h1>
           </div>
-          <Link
-            href="/planes"
-            className="rounded-full border border-line-field bg-paper px-4 py-[9px] text-[14px] text-muted hover:border-clay-tint"
-          >
-            {quota}
-          </Link>
+          {quota && (
+            <Link
+              href="/planes"
+              className="rounded-full border border-line-field bg-paper px-4 py-[9px] text-[14px] text-muted hover:border-clay-tint"
+            >
+              {quota}
+            </Link>
+          )}
         </div>
 
         <IntentionInput t={t.intentionInput} />

@@ -10,6 +10,7 @@ import {
   listVoices,
   remainingFree,
 } from "@/lib/queries";
+import { paymentsEnabled } from "@/lib/payments";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
@@ -53,6 +54,7 @@ export default async function PersonalizarPage({
           breathingOptions={breathingOptions}
           selectedVoiceId={selectedVoiceId}
           plan={user.plan}
+          billing={paymentsEnabled()}
           freeLeft={remainingFree(user)}
           credits={user.credits}
           publishByDefault={user.prefs.publish_by_default}

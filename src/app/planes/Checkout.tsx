@@ -4,13 +4,7 @@ import { useState } from "react";
 import { CREDIT_PACKS } from "@/lib/config";
 import type { Copy } from "@/lib/i18n";
 
-export function Checkout({
-  paymentsEnabled,
-  t,
-}: {
-  paymentsEnabled: boolean;
-  t: Copy["plansPage"];
-}) {
+export function Checkout({ t }: { t: Copy["plansPage"] }) {
   const [pack, setPack] = useState<string>(CREDIT_PACKS[1].id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +62,10 @@ export function Checkout({
       <button
         type="button"
         onClick={() => go("credits")}
-        disabled={busy || !paymentsEnabled}
+        disabled={busy}
         className="om-btn om-btn-solid w-full py-[15px]"
       >
-        {busy ? t.opening : paymentsEnabled ? t.payWithStripe : t.paymentsOff}
+        {busy ? t.opening : t.payWithStripe}
       </button>
 
       <p className="mt-3 text-center text-[13px] text-faint">
@@ -83,7 +77,7 @@ export function Checkout({
       <button
         type="button"
         onClick={() => go("pro")}
-        disabled={busy || !paymentsEnabled}
+        disabled={busy}
         className="om-btn om-btn-ghost w-full py-[15px]"
       >
         {t.goPro}

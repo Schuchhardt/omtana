@@ -11,19 +11,19 @@ export async function SiteHeader() {
   const [user, lang] = await Promise.all([currentUser(), getLang()]);
   const t = copy(lang);
 
+  // Planes no está acá a propósito: el nav es para lo que se usa a diario y la
+  // entrada a planes vive en el pie (y en el perfil, para quien la busca).
   const items: NavItem[] = user
     ? [
         { href: "/home", label: t.nav.home },
         { href: "/personalizar", label: t.nav.customize },
         { href: "/voces", label: t.nav.voices },
         { href: "/biblioteca", label: t.nav.library },
-        { href: "/planes", label: t.nav.plans },
         { href: "/perfil", label: t.nav.profile },
       ]
     : [
         { href: "/", label: t.nav.howItWorks },
         { href: "/voces", label: t.nav.voices },
-        { href: "/planes", label: t.nav.plans },
       ];
 
   return (

@@ -17,7 +17,6 @@ export const en: Copy = {
   nav: {
     howItWorks: "How it works",
     voices: "Voices",
-    plans: "Plans",
     home: "Home",
     customize: "Customize",
     library: "Library",
@@ -88,10 +87,11 @@ export const en: Copy = {
       "The pale blocks already exist. Only the coloured dot is written for you, and that is why generation takes less than a minute.",
   },
 
-  pricing: {
-    eyebrow: "Pricing",
-    title: "Personalizing costs money, so we charge for it",
-    body: "Listening to the catalogue is free. Generating a meditation burns tokens and voice synthesis, and the price says so without dressing it up.",
+  closing: {
+    eyebrow: "Get started",
+    title: "Your first session takes under a minute",
+    body: "Tell us what you need today and the meditation gets written around it, in the voice you pick. If you would rather just listen, the catalogue is open.",
+    note: "No card, nothing to install.",
   },
 
   plans: {
@@ -422,7 +422,6 @@ export const en: Copy = {
     },
     opening: "Opening…",
     payWithStripe: "Pay with Stripe",
-    paymentsOff: "Payments not configured",
     creditsNote: "Credits do not expire. Each one is a meditation of yours, forever.",
     goPro: "Go Pro",
     proNote: "Unlimited generation. It renews every month and cancels whenever you want.",

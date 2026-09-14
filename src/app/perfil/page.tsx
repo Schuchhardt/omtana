@@ -5,6 +5,7 @@ import { Preferences } from "./Preferences";
 import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listVoices, userStats } from "@/lib/queries";
+import { paymentsEnabled } from "@/lib/payments";
 import { formatLongDate } from "@/lib/format";
 import { getLang } from "@/lib/lang";
 import { copy, fill } from "@/lib/i18n";
@@ -49,9 +50,11 @@ export default async function PerfilPage() {
               {fill(t.memberSince, { date: formatLongDate(user.created_at, lang) })}
             </p>
           </div>
-          <Link href="/planes" className="om-btn om-btn-solid px-6 py-[13px] text-[15px]">
-            {t.viewPlans}
-          </Link>
+          {paymentsEnabled() && (
+            <Link href="/planes" className="om-btn om-btn-solid px-6 py-[13px] text-[15px]">
+              {t.viewPlans}
+            </Link>
+          )}
         </div>
 
         <div className="mb-[14px] grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-[14px]">

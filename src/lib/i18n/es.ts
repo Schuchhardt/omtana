@@ -15,7 +15,6 @@ export const es = {
   nav: {
     howItWorks: "Cómo funciona",
     voices: "Voces",
-    plans: "Planes",
     home: "Inicio",
     customize: "Personalizar",
     library: "Biblioteca",
@@ -86,10 +85,11 @@ export const es = {
       "Los bloques claros ya existen. Solo el punto de color se escribe para ti, y por eso la generación toma menos de un minuto.",
   },
 
-  pricing: {
-    eyebrow: "Precio",
-    title: "Personalizar cuesta, así que se cobra",
-    body: "Escuchar el catálogo es gratis. Generar una meditación consume tokens y síntesis de voz, y el precio lo refleja sin rodeos.",
+  closing: {
+    eyebrow: "Empezar",
+    title: "Tu primera sesión toma menos de un minuto",
+    body: "Dinos qué necesitas hoy y la meditación se escribe alrededor de eso, con la voz que elijas. Si prefieres solo escuchar, el catálogo está abierto.",
+    note: "Sin tarjeta y sin instalar nada.",
   },
 
   plans: {
@@ -420,7 +420,6 @@ export const es = {
     },
     opening: "Abriendo…",
     payWithStripe: "Pagar con Stripe",
-    paymentsOff: "Pagos no configurados",
     creditsNote: "Los créditos no vencen. Cada uno es una meditación tuya para siempre.",
     goPro: "Pasar a Pro",
     proNote: "Generación ilimitada. Se renueva cada mes y se cancela cuando quieras.",

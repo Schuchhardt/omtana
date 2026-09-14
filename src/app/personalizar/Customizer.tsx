@@ -29,6 +29,8 @@ interface Props {
   breathingOptions: BreathingOption[];
   selectedVoiceId: string;
   plan: "free" | "pro";
+  /** Si hay pagos configurados. Sin ellos no hay costo, ni tope, ni bloqueo. */
+  billing: boolean;
   freeLeft: number;
   credits: number;
   publishByDefault: boolean;
@@ -44,6 +46,7 @@ export function Customizer({
   breathingOptions,
   selectedVoiceId,
   plan,
+  billing,
   freeLeft,
   credits,
   publishByDefault,
@@ -117,10 +120,11 @@ export function Customizer({
     return `/voces?volver=${encodeURIComponent(`/personalizar?${draft}`)}`;
   })();
 
-  const usesCredit = plan !== "pro" && freeLeft <= 0;
+  const usesCredit = billing && plan !== "pro" && freeLeft <= 0;
   const blocked = usesCredit && credits <= 0;
-  const costLabel =
-    plan === "pro"
+  const costLabel = !billing
+    ? null
+    : plan === "pro"
       ? t.costPro
       : freeLeft > 0
         ? fill(t.costIncluded, { n: freeLeft })
@@ -281,8 +285,8 @@ export function Customizer({
         <div className="mb-[22px] h-px bg-line-hair" />
 
         <Line label={t.linePersonalized} value={formatClock(totals.dynamicSeconds)} />
-        <Line label={t.lineVoice} value={voice?.name ?? "—"} />
-        <Line label={t.lineCost} value={costLabel} last />
+        <Line label={t.lineVoice} value={voice?.name ?? "—"} last={!costLabel} />
+        {costLabel && <Line label={t.lineCost} value={costLabel} last />}
 
         {error && (
           <p role="alert" className="mb-3 text-[14px] leading-[1.5] text-danger">

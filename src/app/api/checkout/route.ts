@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { currentUser } from "@/lib/auth";
 import { db } from "@/lib/supabase";
-import { getStripe, stripeConfigured } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
+import { paymentsEnabled } from "@/lib/payments";
 import { CREDIT_PACKS, PLAN } from "@/lib/config";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: t.signInRequired }, { status: 401 });
 
-  if (!stripeConfigured()) {
+  if (!paymentsEnabled()) {
     return NextResponse.json(
       { error: t.paymentsNotConfigured },
       { status: 503 },
