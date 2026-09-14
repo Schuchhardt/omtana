@@ -8,14 +8,18 @@ export interface NavItem {
   label: string;
 }
 
-export function NavTabs({ items }: { items: NavItem[] }) {
+/** La misma regla de pestaña activa para el nav de escritorio y el de móvil. */
+export function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+export function NavTabs({ items, className = "" }: { items: NavItem[]; className?: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-wrap items-center gap-[3px]">
+    <nav className={`items-center gap-[3px] ${className}`}>
       {items.map((item) => {
-        const active =
-          item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        const active = isActive(pathname, item.href);
         return (
           <Link
             key={item.href}

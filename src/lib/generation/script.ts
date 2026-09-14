@@ -76,7 +76,7 @@ export async function writeScript(req: ScriptRequest): Promise<ScriptResult> {
   const brief = dynamic
     .map(
       (s) =>
-        `- Sección ${s.position} ("${s.label}"): ${s.minutes} minuto(s), alrededor de ${wordTarget(s.minutes)} palabras. ${s.brief}`,
+        `- Sección ${s.position} ("${s.label}"): ${s.minutes} minuto(s), alrededor de ${wordTarget(s)} palabras. ${s.brief}`,
     )
     .join("\n");
 

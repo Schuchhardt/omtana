@@ -58,7 +58,7 @@ async function writeFixedSections(
   const brief = fixed
     .map(
       (s) =>
-        `- Sección ${s.position} ("${s.label}"): ${s.minutes} minuto(s), alrededor de ${wordTarget(s.minutes)} palabras. ${s.brief}`,
+        `- Sección ${s.position} ("${s.label}"): ${s.minutes} minuto(s), alrededor de ${wordTarget(s)} palabras. ${s.brief}`,
     )
     .join("\n");
 

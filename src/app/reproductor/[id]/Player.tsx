@@ -99,7 +99,7 @@ export function Player(props: Props) {
   }
 
   return (
-    <div className="relative flex min-h-[calc(100vh-62px)] flex-col items-center justify-center overflow-hidden px-6 py-16">
+    <div className="relative flex min-h-[calc(100svh-var(--om-header-h))] flex-col items-center justify-center overflow-hidden px-6 py-16">
       <div
         className="pointer-events-none absolute -inset-[20%] animate-breathe"
         style={{

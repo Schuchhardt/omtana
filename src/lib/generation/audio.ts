@@ -6,7 +6,7 @@ import { join } from "node:path";
 const FFMPEG = process.env.FFMPEG_PATH ?? "ffmpeg";
 const FFPROBE = process.env.FFPROBE_PATH ?? "ffprobe";
 
-export async function run(bin: string, args: string[]): Promise<string> {
+function exec(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
@@ -17,9 +17,15 @@ export async function run(bin: string, args: string[]): Promise<string> {
       reject(new Error(`No se pudo ejecutar ${bin}: ${e.message}. ¿Está instalado ffmpeg?`)),
     );
     child.on("close", (code) =>
-      code === 0 ? resolve(out) : reject(new Error(`${bin} salió con ${code}:\n${err.slice(-1500)}`)),
+      code === 0
+        ? resolve({ stdout: out, stderr: err })
+        : reject(new Error(`${bin} salió con ${code}:\n${err.slice(-1500)}`)),
     );
   });
+}
+
+export async function run(bin: string, args: string[]): Promise<string> {
+  return (await exec(bin, args)).stdout;
 }
 
 export class FfmpegMissingError extends Error {}
@@ -57,6 +63,120 @@ export async function durationOf(file: string): Promise<number> {
     file,
   ]);
   return Number.parseFloat(out.trim()) || 0;
+}
+
+/* ───────────────────────── relleno repartido por las pausas ───────────────────────── */
+
+/**
+ * Por debajo de esto la voz se considera callada.
+ *
+ * Medido contra lo que entrega ElevenLabs: las pausas del guion no son silencio
+ * digital, traen room tone alrededor de -30 dB. Con el -40 dB de manual no se
+ * detecta ni una sola pausa en voz real.
+ */
+const SILENCE_FLOOR = "-30dB";
+/** Un silencio más corto que esto es respiración, no una pausa del guion. */
+const MIN_PAUSE_SECONDS = 0.35;
+/**
+ * Tope de seguridad al estirar una pausa. Es alto a propósito: en una meditación
+ * un silencio largo en medio es parte del guion, mientras que el mismo silencio
+ * al final suena a audio cortado. Ante la duda, va adentro.
+ */
+const MAX_PAUSE_GROWTH_SECONDS = 8;
+/** Aire que se deja al final del tramo aunque haya pausas donde repartir. */
+const SEGMENT_TAIL_SECONDS = 1.5;
+/** Bajo este déficit no vale la pena repartir: la cola sola ya suena natural. */
+const DISTRIBUTE_OVER_SECONDS = 2;
+
+const MONO = "aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono";
+
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+/**
+ * Las pausas que el guion ya trae, marcadas con "..." y respetadas por la voz.
+ *
+ * Se descartan la de entrada y la de salida: estirar esas es justo lo que
+ * queremos evitar.
+ */
+async function probePauses(file: string, spoken: number) {
+  const { stderr } = await exec(FFMPEG, [
+    "-i", file,
+    "-af", `silencedetect=noise=${SILENCE_FLOOR}:d=${MIN_PAUSE_SECONDS}`,
+    "-f", "null", "-",
+  ]);
+
+  const starts = [...stderr.matchAll(/silence_start:\s*(-?[\d.]+)/g)].map((m) => Number(m[1]));
+  const ends = [...stderr.matchAll(/silence_end:\s*([\d.]+)/g)].map((m) => Number(m[1]));
+
+  const pauses: number[] = [];
+  for (let i = 0; i < starts.length && i < ends.length; i++) {
+    const start = starts[i];
+    const end = ends[i];
+    if (start <= 0.3 || end >= spoken - 0.8) continue;
+    pauses.push((start + end) / 2);
+  }
+  return pauses;
+}
+
+/**
+ * Lleva un tramo a su duración objetivo repartiendo el silencio por las pausas
+ * del guion, en vez de amontonarlo al final.
+ *
+ * Con todo el relleno junto al final, un tramo de un minuto podía terminar con
+ * veinte segundos de nada: se oye como si el audio se hubiera cortado. Repartido
+ * por los "..." se oye como lo que es, una meditación que respira.
+ */
+async function padToTarget(
+  source: string,
+  destination: string,
+  spoken: number,
+  target: number,
+): Promise<void> {
+  const deficit = target - spoken;
+  const pauses =
+    deficit > DISTRIBUTE_OVER_SECONDS ? await probePauses(source, spoken) : [];
+
+  // Sin pausas donde repartir (tramo corto o voz corrida): la cola es lo que hay.
+  if (pauses.length === 0) {
+    await run(FFMPEG, [
+      "-y", "-i", source,
+      "-af", `apad=whole_dur=${target.toFixed(3)}`,
+      "-ar", "44100", "-ac", "1",
+      destination,
+    ]);
+    return;
+  }
+
+  const growth = Math.min(
+    MAX_PAUSE_GROWTH_SECONDS,
+    (deficit - SEGMENT_TAIL_SECONDS) / pauses.length,
+  );
+  const chunks = pauses.length + 1;
+
+  // Se corta la voz en los puntos de pausa, se intercala silencio y se vuelve a
+  // pegar. El apad final cierra la cola y garantiza la duración exacta.
+  const filter = [
+    `[0:a]${MONO},asplit=${chunks}${range(chunks).map((i) => `[s${i}]`).join("")}`,
+    ...range(chunks).map((i) => {
+      const from = i === 0 ? 0 : pauses[i - 1];
+      const to = i === chunks - 1 ? null : pauses[i];
+      const trim = `atrim=start=${from.toFixed(3)}${to === null ? "" : `:end=${to.toFixed(3)}`}`;
+      return `[s${i}]${trim},asetpts=PTS-STARTPTS[c${i}]`;
+    }),
+    ...pauses.map((_, i) => `aevalsrc=0:d=${growth.toFixed(3)}:s=44100,${MONO}[g${i}]`),
+    range(chunks)
+      .map((i) => `[c${i}]${i < pauses.length ? `[g${i}]` : ""}`)
+      .join("") +
+      `concat=n=${chunks + pauses.length}:v=0:a=1,apad=whole_dur=${target.toFixed(3)}[out]`,
+  ].join(";");
+
+  await run(FFMPEG, [
+    "-y", "-i", source,
+    "-filter_complex", filter,
+    "-map", "[out]",
+    "-ar", "44100", "-ac", "1",
+    destination,
+  ]);
 }
 
 export interface SegmentInput {
@@ -108,15 +228,13 @@ export async function assemble(
       await writeFile(raw, seg.audio);
 
       const spoken = await durationOf(raw);
-      const seconds = Math.max(spoken, seg.targetSeconds);
 
       // Mono 44.1k para que el concat no tenga que renegociar formatos.
-      await run(FFMPEG, [
-        "-y", "-i", raw,
-        "-af", `apad=whole_dur=${seconds.toFixed(3)}`,
-        "-ar", "44100", "-ac", "1",
-        fixed,
-      ]);
+      await padToTarget(raw, fixed, spoken, seg.targetSeconds);
+
+      // Se mide el resultado en vez de suponerlo: las pausas repartidas mueven
+      // los offsets, y de ahí salen las fases y las palabras del reproductor.
+      const seconds = await durationOf(fixed);
 
       padded.push(fixed);
       out.push({

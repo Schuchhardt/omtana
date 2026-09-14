@@ -15,6 +15,7 @@ import { ensureBucket, uploadAudio } from "../src/lib/storage";
 import { durationOf } from "../src/lib/generation/audio";
 
 const MUSIC_DIR = "assets/music";
+const AUDIO_EXTENSIONS = [".mp3", ".m4a", ".wav"];
 
 const VOICES = [
   { slug: "aurora", name: "Aurora", accent: "Español neutro", gender: "Femenina", tone: "Media", languages: ["es", "en"], blurb: "Pausada y templada. Funciona bien para sesiones largas y para dormir." },
@@ -88,7 +89,7 @@ async function main() {
     log.info("Deja ahí tus pistas de Suno (.mp3) y vuelve a correr el seed.");
   } else {
     const files = (await readdir(MUSIC_DIR)).filter((f) =>
-      [".mp3", ".m4a", ".wav"].includes(extname(f).toLowerCase()),
+      AUDIO_EXTENSIONS.includes(extname(f).toLowerCase()),
     );
 
     if (files.length === 0) {
@@ -96,7 +97,8 @@ async function main() {
     }
 
     for (const file of files) {
-      const slug = slugify(basename(file, extname(file)));
+      const title = trackName(file);
+      const slug = slugify(title);
       const local = join(MUSIC_DIR, file);
       const path = `music/${slug}.mp3`;
 
@@ -106,7 +108,7 @@ async function main() {
       const { error } = await db().from("omtana_music_tracks").upsert(
         {
           slug,
-          name: titleize(basename(file, extname(file))),
+          name: titleize(title),
           mood: "ambiente",
           audio_path: path,
           duration_seconds: Math.round(await durationOf(local)),
@@ -129,6 +131,21 @@ function slugify(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/**
+ * El nombre de la pista, sin extensión.
+ *
+ * Quita las extensiones de audio repetidas: lo que sale de una conversión suele
+ * llegar como "pista.wav.mp3", y con un solo `basename` el nombre visible
+ * terminaba siendo "Pista.wav".
+ */
+function trackName(file: string): string {
+  let name = file;
+  while (AUDIO_EXTENSIONS.includes(extname(name).toLowerCase())) {
+    name = basename(name, extname(name));
+  }
+  return name;
 }
 
 function titleize(text: string): string {
