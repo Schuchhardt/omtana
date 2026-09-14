@@ -15,7 +15,8 @@
     "generate": "tsx --conditions=react-server scripts/generate.ts",
     "respiracion": "tsx --conditions=react-server scripts/breathing.ts",
     "video": "tsx --conditions=react-server scripts/export-video.ts",
-    "setup": "npm run db:push && npm run seed"
+    "setup": "npm run db:push && npm run seed",
+    "icons": "tsx --conditions=react-server scripts/icons.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

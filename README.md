@@ -60,6 +60,7 @@ Necesitas `ffmpeg` y `ffprobe` en el PATH (`brew install ffmpeg`).
 | `npm run respiracion` | Graba y verifica los ejercicios de respiración de una voz. Ver abajo. |
 | `npm run generate` | Genera meditaciones. Ver abajo. |
 | `npm run video` | Exporta el video 1920×1080 para YouTube. |
+| `npm run icons` | Rehace los PNG del manifiesto desde el símbolo de la marca. Solo cuando cambia el símbolo. |
 
 ### Generar meditaciones
 
@@ -109,11 +110,18 @@ medir el archivo para comprobarlo.
 npm run respiracion -- --listar                     # el banco y lo que dura cada uno
 npm run respiracion -- --guion --ejercicio 4-7-8    # la grilla, sin gastar nada
 npm run respiracion -- --voz aurora                 # graba lo que le falte a esa voz
+npm run respiracion -- --voz todas                  # el banco entero, cada voz en sus idiomas
 npm run respiracion -- --voz aurora --verificar     # mide los audios ya grabados
+npm run respiracion -- --limpiar                    # borra lo grabado para huecos que ya no existen
 npm run respiracion -- --voz aurora --guardar assets/respiracion   # copia local para escucharla
 ```
 
-Opciones: `--voz <slug>`, `--ejercicio <slug>`, `--idioma es|en|pt|todos`,
+Sin `--idioma` cada voz se graba en los idiomas que declara hablar: las señales
+en español con una voz inglesa dan un acento que no se arregla después. Volver a
+correrlo salta lo que ya existe, así que es la forma de reponer lo que haya
+fallado.
+
+Opciones: `--voz <slug>|todas`, `--ejercicio <slug>`, `--idioma es|en|pt|todos`,
 `--hueco 120|150`, `--rehacer`, `--regrabar`, `--verificar`, `--guardar <dir>`.
 
 `--rehacer` vuelve a armar el ejercicio reutilizando las señales ya grabadas y
@@ -208,6 +216,10 @@ src/
       tts.ts              ElevenLabs
       audio.ts            mezcla con ffmpeg
       pipeline.ts         orquesta y persiste
+    manifest.ts           manifiesto de la PWA
+    sw.js/                service worker, versionado por build
+    offline/              lo que se ve sin red
+  lib/version.ts          versión y hash del build
 scripts/                  CLI: setup, seed, generación, video
 supabase/migrations/      esquema
 design/                   el archivo original de Claude Design, como referencia
@@ -230,6 +242,34 @@ error devuelve el crédito y lo deja anotado en el libro de movimientos.
 
 **El cupo mensual no necesita cron.** Se reinicia solo la primera vez que el
 usuario aparece dentro de un mes nuevo.
+
+## PWA y versión del build
+
+Se instala en el teléfono y en el escritorio: manifiesto en `src/app/manifest.ts`,
+íconos en `public/icons/` y service worker en `src/app/sw.js/route.ts`.
+
+**El cache va versionado por build.** `next.config.ts` calcula un identificador
+al compilar —`COMMIT_REF` en Netlify, `git rev-parse` en local— y lo inyecta como
+`NEXT_PUBLIC_BUILD_ID`. Ese identificador nombra el cache del worker, así que al
+activarse un deploy nuevo el worker borra todo lo que quedó del anterior. Nadie
+arrastra assets viejos entre deploys.
+
+**El HTML nunca se cachea.** Solo van a cache los archivos con hash en el nombre
+(`/_next/static/`) y los activos de marca, que no cambian sin cambiar de URL. Las
+páginas se piden siempre a la red: cachearlas sería justo lo que impide ver el
+último deploy, y además traen datos de la sesión. Sin red, una navegación cae en
+`/offline`. Las rutas `/api/`, las peticiones RSC y los rangos del `<audio>` pasan
+de largo.
+
+**La pestaña abierta se actualiza sola.** `ServiceWorkerBridge` pregunta por
+versiones nuevas al volver a la pestaña y cada quince minutos, y cuando encuentra
+una le cede el control y recarga. Si hay audio sonando espera: recargar a alguien
+a mitad de una meditación sería peor que mostrarle un build de hace cinco
+minutos. En desarrollo no registra nada y desregistra lo que hubiera, porque el
+cache de `/_next/static/` es incompatible con la recarga en caliente.
+
+El pie del sitio muestra `v0.1.0 · <hash>`, que es la forma de saber, mirando la
+página, si lo que corre en el navegador es el último deploy.
 
 ## Despliegue
 

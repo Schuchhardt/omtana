@@ -21,24 +21,46 @@ export async function ensureBucket(): Promise<void> {
 
 export class FileTooLargeError extends Error {}
 
+/** Intentos de subida antes de rendirse, y cuánto se espera entre ellos. */
+const UPLOAD_ATTEMPTS = 3;
+const UPLOAD_BACKOFF_MS = 1500;
+
+/**
+ * Sube un audio, reintentando los fallos de red.
+ *
+ * Para cuando se llega acá el archivo ya costó: minutos de síntesis, o una
+ * generación entera. Un "fetch failed" pasajero — que aparece al subir muchos
+ * archivos seguidos — tiraba todo ese trabajo a la basura. Los errores que no
+ * se arreglan esperando (archivo muy grande, permisos) salen al primer intento.
+ */
 export async function uploadAudio(
   path: string,
   body: Buffer | Uint8Array,
   contentType = "audio/mpeg",
 ): Promise<string> {
-  const { error } = await db()
-    .storage.from(AUDIO_BUCKET)
-    .upload(path, body, { contentType, upsert: true });
-  if (error) {
+  let last = "";
+
+  for (let attempt = 1; attempt <= UPLOAD_ATTEMPTS; attempt++) {
+    const { error } = await db()
+      .storage.from(AUDIO_BUCKET)
+      .upload(path, body, { contentType, upsert: true });
+
+    if (!error) return path;
+
     if (/exceeded the maximum allowed size|Payload too large/i.test(error.message)) {
       throw new FileTooLargeError(
         `${path} pasa el límite de subida del proyecto ` +
           `(${(body.byteLength / 1048576).toFixed(0)} MB). Súbelo en Supabase → Storage → Settings.`,
       );
     }
-    throw new Error(`Subida fallida (${path}): ${error.message}`);
+
+    last = error.message || "sin detalle";
+    if (attempt < UPLOAD_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, UPLOAD_BACKOFF_MS * attempt));
+    }
   }
-  return path;
+
+  throw new Error(`Subida fallida (${path}) tras ${UPLOAD_ATTEMPTS} intentos: ${last}`);
 }
 
 export async function downloadAudio(path: string): Promise<Buffer> {

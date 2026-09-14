@@ -3,6 +3,7 @@ import { Jost } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SetupNotice } from "@/components/SetupNotice";
+import { ServiceWorkerBridge } from "@/components/ServiceWorkerBridge";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
@@ -23,7 +24,20 @@ export async function generateMetadata(): Promise<Metadata> {
       template: "%s · Omtana",
     },
     description: t.description,
-    icons: { icon: "/brand/omtana-symbol-black.svg" },
+    icons: {
+      icon: "/brand/omtana-symbol-black.svg",
+      apple: "/icons/apple-touch-icon.png",
+    },
+    /**
+     * Instalada en iOS se abre sin barra de Safari y la barra de estado toma el
+     * color de la arena, como el resto de la app. El manifiesto cubre el mismo
+     * caso en Android; iOS todavía necesita estas dos.
+     */
+    appleWebApp: {
+      capable: true,
+      title: "Omtana",
+      statusBarStyle: "default",
+    },
     openGraph: {
       title: t.title,
       description: t.ogDescription,
@@ -44,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={lang} className={jost.variable}>
       <body className="min-h-screen font-sans">
+        <ServiceWorkerBridge />
         <SetupNotice />
         <SiteHeader />
         {children}

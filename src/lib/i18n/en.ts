@@ -161,6 +161,7 @@ export const en: Copy = {
 
   footer: {
     tagline: "Meditations generated from your intention.",
+    version: "Installed version",
     languages: "Meditations in Spanish, English and Portuguese",
     copyright: "© 2026 Omtana",
     terms: "Terms and conditions",
@@ -176,6 +177,15 @@ export const en: Copy = {
       library: "My library",
       profile: "My profile",
     },
+  },
+
+  offline: {
+    eyebrow: "Offline",
+    title: "There is no connection right now",
+    body:
+      "Omtana needs a connection to prepare and play a meditation. " +
+      "Try again once you are back online.",
+    retry: "Try again",
   },
 
   setupNotice: {

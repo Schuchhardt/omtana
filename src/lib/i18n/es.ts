@@ -159,6 +159,7 @@ export const es = {
 
   footer: {
     tagline: "Meditaciones generadas a partir de tu intención.",
+    version: "Versión instalada",
     languages: "Meditaciones en español, inglés y portugués",
     copyright: "© 2026 Omtana",
     terms: "Términos y condiciones",
@@ -174,6 +175,15 @@ export const es = {
       library: "Mi biblioteca",
       profile: "Mi perfil",
     },
+  },
+
+  offline: {
+    eyebrow: "Sin conexión",
+    title: "No hay red ahora mismo",
+    body:
+      "Omtana necesita conexión para preparar y reproducir una meditación. " +
+      "Vuelve a intentarlo cuando tengas señal.",
+    retry: "Reintentar",
   },
 
   setupNotice: {

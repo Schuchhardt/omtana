@@ -3,6 +3,7 @@ import Link from "next/link";
 import { paymentsEnabled } from "@/lib/payments";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
+import { VERSION_LABEL } from "@/lib/version";
 
 export async function SiteFooter() {
   const t = copy(await getLang()).footer;
@@ -68,11 +69,19 @@ export async function SiteFooter() {
         ))}
       </div>
 
-      <div className="om-shell flex flex-wrap gap-5 pb-12 text-[14px] text-faint">
+      <div className="om-shell flex flex-wrap items-center gap-5 pb-12 text-[14px] text-faint">
         <span>{t.copyright}</span>
         <Link href="/terminos" className="text-faint hover:text-ink">{t.terms}</Link>
         <Link href="/terminos#datos" className="text-faint hover:text-ink">{t.privacy}</Link>
         <span className="ml-auto">{t.languages}</span>
+        {/* Versión del build. Sirve para saber, mirando el pie, si lo que está
+            corriendo en el navegador es el último deploy. */}
+        <span
+          title={t.version}
+          className="font-mono text-[12px] tracking-[0.04em] text-faint-soft"
+        >
+          {VERSION_LABEL}
+        </span>
       </div>
     </footer>
   );
