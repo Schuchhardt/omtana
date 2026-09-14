@@ -1,11 +1,15 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { Player } from "./Player";
+import { Player, type PlayerBreathing, type PlayerTrack } from "./Player";
 import { currentUser } from "@/lib/auth";
-import { getPlayable } from "@/lib/queries";
-import { signedUrl } from "@/lib/storage";
+import { getPlayable, listBreathingRenders, listMusic } from "@/lib/queries";
+import { signedUrl, signedUrls } from "@/lib/storage";
 import { getLang } from "@/lib/lang";
-import { copy } from "@/lib/i18n";
+import { copy, localized } from "@/lib/i18n";
+import { breathingSlotSeconds } from "@/lib/breathing";
+
+/** Desde esta versión la respiración va aparte; antes venía dentro del audio. */
+const BREATHING_APART_FROM = 2;
 
 export async function generateMetadata({
   params,
@@ -25,10 +29,62 @@ export default async function ReproductorPage({
 }) {
   const { id } = await params;
   const user = await currentUser();
-  const [found, lang] = await Promise.all([getPlayable(id, user?.id ?? null), getLang()]);
+
+  /*
+   * La música de fondo se mezcla en el navegador, así que el reproductor recibe
+   * el catálogo entero ya firmado y la persona cambia de pista sin volver al
+   * servidor. Las pistas que no se pudieron firmar se caen de la lista en vez
+   * de aparecer como un botón que no suena.
+   */
+  const [found, lang, tracks] = await Promise.all([
+    getPlayable(id, user?.id ?? null),
+    getLang(),
+    listMusic(),
+  ]);
   if (!found) notFound();
 
   const { meditation, segments, cues, voice } = found;
+
+  /*
+   * La respiración también es una capa aparte, y por eso se puede cambiar o
+   * apagar acá. Solo se ofrece sobre sesiones generadas después de que salió
+   * del guion: en las anteriores el audio ya la trae adentro y sonarían dos.
+   */
+  const renders =
+    meditation.plan_version >= BREATHING_APART_FROM
+      ? await listBreathingRenders(
+          meditation.voice_id,
+          meditation.locale,
+          meditation.breathing_slot_seconds ||
+            breathingSlotSeconds(Math.round(meditation.duration_seconds / 60)),
+        )
+      : [];
+
+  const [audioUrl, trackUrls, breathingUrls] = await Promise.all([
+    meditation.status === "ready" ? signedUrl(meditation.audio_path) : null,
+    signedUrls(tracks.map((track) => track.audio_path)),
+    signedUrls(renders.map((render) => render.audio_path)),
+  ]);
+
+  const playableTracks: PlayerTrack[] = tracks.flatMap((track, i) =>
+    trackUrls[i] ? [{ id: track.id, name: track.name, url: trackUrls[i]! }] : [],
+  );
+
+  const breathing: PlayerBreathing[] = renders.flatMap((render, i) => {
+    const url = breathingUrls[i];
+    if (!url || !render.exercise) return [];
+    return [
+      {
+        id: render.exercise.id,
+        name: localized(render.exercise, lang, "name"),
+        summary: localized(render.exercise, lang, "summary"),
+        seconds: render.seconds,
+        cycles: render.cycles,
+        url,
+        steps: render.steps,
+      },
+    ];
+  });
 
   return (
     <main>
@@ -37,12 +93,14 @@ export default async function ReproductorPage({
         title={meditation.title}
         voiceName={voice?.name ?? "Omtana"}
         initialStatus={meditation.status}
-        initialAudioUrl={
-          meditation.status === "ready" ? await signedUrl(meditation.audio_path) : null
-        }
+        initialAudioUrl={audioUrl}
         durationSeconds={meditation.duration_seconds}
         segments={segments}
         cues={cues}
+        tracks={playableTracks}
+        breathing={breathing}
+        breathingId={meditation.breathing_exercise_id}
+        bakedMusic={!!meditation.music_track_id}
         owned={meditation.user_id === user?.id}
         t={copy(lang).player}
       />

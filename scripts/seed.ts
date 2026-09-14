@@ -112,6 +112,113 @@ const INTENTIONS = [
       brief: "Concrete, everyday gratitude, nothing abstract or cosmic. Small, close-at-hand things." } } },
 ];
 
+
+/**
+ * Ejercicios de respiración.
+ *
+ * No son texto: son una grilla de tiempo. `phases` define un ciclo y el resto
+ * lo calcula `src/lib/breathing.ts` según el hueco que le dé la sesión. El
+ * audio no se genera acá — se pregenera con `npm run respiracion`, que es lo
+ * que permite verificarlo antes de que lo escuche nadie.
+ */
+const BREATHING = [
+  {
+    slug: "4-7-8",
+    name: "4-7-8",
+    summary: "Inhalas cuatro, sostienes siete y sueltas ocho. La exhalación larga es la que baja la activación.",
+    phases: [
+      { kind: "inhale", seconds: 4 },
+      { kind: "hold", seconds: 7 },
+      { kind: "exhale", seconds: 8 },
+    ],
+    min_cycles: 2,
+    max_cycles: 6,
+    counting: "last",
+    breath_sounds: true,
+    lead_in_seconds: 12,
+    gap_seconds: 4,
+    tail_seconds: 8,
+    i18n: {
+      en: {
+        summary: "Breathe in for four, hold for seven, let go for eight. The long exhale is what brings the activation down.",
+      },
+    },
+  },
+  {
+    slug: "caja-4-4-4-4",
+    name: "Caja 4-4-4-4",
+    summary: "Cuatro tiempos iguales, con los pulmones llenos y vacíos. Simétrico y fácil de seguir la primera vez.",
+    phases: [
+      { kind: "inhale", seconds: 4 },
+      { kind: "hold", seconds: 4 },
+      { kind: "exhale", seconds: 4 },
+      { kind: "empty", seconds: 4 },
+    ],
+    min_cycles: 2,
+    max_cycles: 8,
+    counting: "last",
+    breath_sounds: true,
+    lead_in_seconds: 13,
+    gap_seconds: 4,
+    tail_seconds: 8,
+    i18n: {
+      en: {
+        name: "Box 4-4-4-4",
+        summary: "Four equal counts, lungs full and lungs empty. Symmetrical and easy to follow the first time.",
+      },
+    },
+  },
+  {
+    slug: "coherente-5-5",
+    name: "Coherente 5-5",
+    summary: "Cinco y cinco, sin retenciones. Seis respiraciones por minuto: el patrón que se sostiene sin esfuerzo.",
+    phases: [
+      { kind: "inhale", seconds: 5 },
+      { kind: "exhale", seconds: 5 },
+    ],
+    min_cycles: 3,
+    max_cycles: 12,
+    // Sin conteo: a este ritmo la voz contando estorba más de lo que guía.
+    counting: "none",
+    breath_sounds: true,
+    lead_in_seconds: 11,
+    gap_seconds: 4,
+    tail_seconds: 8,
+    i18n: {
+      en: {
+        name: "Coherent 5-5",
+        summary: "Five and five, no holds. Six breaths a minute: the pattern you can hold without effort.",
+      },
+    },
+  },
+  {
+    slug: "suspiro-fisiologico",
+    name: "Suspiro fisiológico",
+    summary: "Dos inhalaciones seguidas y una exhalación larga. El más rápido para cortar una activación alta.",
+    phases: [
+      { kind: "inhale", seconds: 3, level: 0.72 },
+      { kind: "inhale", seconds: 1, level: 1, cue: "sip" },
+      { kind: "exhale", seconds: 7 },
+    ],
+    min_cycles: 3,
+    // Tope más bajo que el resto: el suspiro es corto por diseño — la dosis
+    // habitual son tres a cinco — pero con el hueco en dos minutos se queda muy
+    // por debajo, así que llega hasta siete antes de devolverle tiempo a la sesión.
+    max_cycles: 7,
+    counting: "last",
+    breath_sounds: true,
+    lead_in_seconds: 13,
+    gap_seconds: 4,
+    tail_seconds: 8,
+    i18n: {
+      en: {
+        name: "Physiological sigh",
+        summary: "Two inhales back to back and one long exhale. The fastest way to cut high activation.",
+      },
+    },
+  },
+];
+
 async function main() {
   requireEnv("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY");
   log.title("Cargando el banco curado");
@@ -139,6 +246,17 @@ async function main() {
     );
   if (intentionError) fatal(`Intenciones: ${intentionError.message}`);
   log.ok(`${INTENTIONS.length} intenciones`);
+
+  /* Ejercicios de respiración */
+  const { error: breathingError } = await db()
+    .from("omtana_breathing_exercises")
+    .upsert(
+      BREATHING.map((b, i) => ({ ...b, sort: i })),
+      { onConflict: "slug", ignoreDuplicates: false },
+    );
+  if (breathingError) fatal(`Respiración: ${breathingError.message}`);
+  log.ok(`${BREATHING.length} ejercicios de respiración`);
+  log.info("Falta grabarlos: npm run respiracion -- --voz aurora");
 
   /* Música: lo que haya en assets/music */
   if (!existsSync(MUSIC_DIR)) {
@@ -178,7 +296,7 @@ async function main() {
     if (files.length) log.ok(`${files.length} pistas de música`);
   }
 
-  log.done("Banco cargado. Siguiente: npm run voices:link");
+  log.done("Banco cargado. Siguiente: npm run voices:link y npm run respiracion");
 }
 
 function slugify(text: string): string {

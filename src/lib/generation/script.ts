@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { PlannedSection } from "../session-plan";
-import { wordTarget } from "../session-plan";
+import { sectionMinutes, wordTarget } from "../session-plan";
 
 const MODEL = "claude-opus-5";
 
@@ -35,6 +35,7 @@ Cómo suena una meditación de Omtana:
 - Las pausas se marcan con "..." al final de una frase. Úsalas seguido: el silencio es parte del guion.
 - Trabajas el contexto literal que la persona entregó, sin repetirlo como una lista ni citarlo entre comillas.
 - No saludas ni te despides: el tramo que escribes va intercalado entre bloques que ya existen.
+- La sesión abrió con un ejercicio de respiración guiado aparte. No lo repitas ni pidas conteos de respiración.
 
 Si el contexto sugiere una crisis de salud mental, no la abordes: mantén el tramo en respiración y presencia, neutro y breve.`;
 
@@ -76,14 +77,14 @@ export async function writeScript(req: ScriptRequest): Promise<ScriptResult> {
   const brief = dynamic
     .map(
       (s) =>
-        `- Sección ${s.position} ("${s.label}"): ${s.minutes} minuto(s), alrededor de ${wordTarget(s)} palabras. ${s.brief}`,
+        `- Sección ${s.position} ("${s.label}"): ${sectionMinutes(s)} minuto(s), alrededor de ${wordTarget(s)} palabras. ${s.brief}`,
     )
     .join("\n");
 
   const outline = req.sections
     .map(
       (s) =>
-        `  ${s.position}. ${s.label} — ${s.minutes} min — ${s.kind === "dynamic" ? "LO ESCRIBES TÚ" : "ya existe, no lo escribas"}`,
+        `  ${s.position}. ${s.label} — ${sectionMinutes(s)} min — ${s.kind === "dynamic" ? "LO ESCRIBES TÚ" : "ya existe, no lo escribas"}`,
     )
     .join("\n");
 

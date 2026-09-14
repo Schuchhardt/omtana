@@ -2,7 +2,8 @@
  * Aplica las migraciones de supabase/migrations contra la base apuntada por
  * SUPABASE_DB_URL (la cadena de conexión directa de Postgres, no la URL de API).
  *
- *   npm run db:push
+ *   npm run db:push                      todas
+ *   npm run db:push -- --solo 0004       solo esa
  *
  * Si prefieres no dar la cadena de Postgres, pega el archivo en el SQL editor
  * de Supabase: el script lo imprime con --print.
@@ -17,9 +18,18 @@ const DIR = "supabase/migrations";
 
 async function main() {
   const args = parseArgs();
-  const files = (await readdir(DIR)).filter((f) => f.endsWith(".sql")).sort();
+  const all = (await readdir(DIR)).filter((f) => f.endsWith(".sql")).sort();
 
-  if (files.length === 0) fatal(`No hay migraciones en ${DIR}.`);
+  // Las migraciones no llevan registro de cuáles ya corrieron, así que aplicar
+  // el directorio entero sobre una base viva falla en la primera que crea algo
+  // que ya existe. `--solo 0004` aplica la nueva y nada más.
+  const only = args.values.get("solo");
+  const files = only ? all.filter((f) => f.startsWith(only)) : all;
+
+  if (all.length === 0) fatal(`No hay migraciones en ${DIR}.`);
+  if (files.length === 0) {
+    fatal(`Ninguna migración empieza con "${only}". Hay: ${all.join(", ")}`);
+  }
 
   if (args.flags.has("print")) {
     for (const f of files) process.stdout.write(await readFile(join(DIR, f), "utf8"));

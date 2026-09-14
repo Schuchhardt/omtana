@@ -4,8 +4,9 @@ import { planSession } from "../session-plan";
 import { writeScript } from "./script";
 import { synthesize } from "./tts";
 import { assemble, ensureFfmpeg, type SegmentInput } from "./audio";
-import { ensureTemplate } from "./template";
-import type { Intention, Meditation, MusicTrack, Voice } from "../types";
+import { ensureTemplate, PLAN_VERSION } from "./template";
+import { breathingSlotSeconds } from "../breathing";
+import type { BreathingRender, Intention, Meditation, MusicTrack, Voice } from "../types";
 
 export interface GenerateOptions {
   onStep?: (step: string) => void;
@@ -54,7 +55,16 @@ export async function generateMeditation(
   }
 
   const durationMinutes = Math.max(5, Math.round(meditation.duration_seconds / 60) || 15);
-  const plan = planSession(durationMinutes);
+
+  /*
+   * La respiración no se genera acá: es una pista pregenerada (`npm run
+   * respiracion`) que el reproductor pone antes de la meditación. Lo único que
+   * el motor necesita saber es cuánto dura, para descontárselo al cuerpo y que
+   * la sesión mida lo que la persona pidió. Lo que el ejercicio no ocupa del
+   * hueco se lo queda el tramo personalizado.
+   */
+  const breathingSeconds = await breathingLength(meditation, durationMinutes);
+  const plan = planSession(durationMinutes, breathingSeconds);
 
   // Antes que nada: sin ffmpeg no hay mezcla posible, y todo lo que viene
   // después cuesta plata. Que falle acá y no al final.
@@ -135,7 +145,7 @@ export async function generateMeditation(
       inputs.push({
         position: section.position,
         audio: await downloadAudio(templated.audio_path),
-        targetSeconds: section.minutes * 60,
+        targetSeconds: section.seconds,
       });
       continue;
     }
@@ -151,7 +161,7 @@ export async function generateMeditation(
     inputs.push({
       position: section.position,
       audio: mp3,
-      targetSeconds: section.minutes * 60,
+      targetSeconds: section.seconds,
     });
   }
 
@@ -201,10 +211,37 @@ export async function generateMeditation(
       audio_path: audioPath,
       duration_seconds: assembled.totalSeconds,
       keywords: script.keywords,
+      breathing_slot_seconds: breathingSlotSeconds(durationMinutes),
+      plan_version: PLAN_VERSION,
       status: "ready",
       ready_at: new Date().toISOString(),
     })
     .eq("id", meditationId);
+}
+
+/**
+ * Cuánto ocupa la respiración elegida, según el audio que ya existe.
+ *
+ * Se lee del render y no del ejercicio: el render es el archivo que va a sonar,
+ * y si no está — porque nadie lo generó para esta voz — la sesión se arma sin
+ * respiración en vez de reservar un hueco que nadie va a llenar.
+ */
+async function breathingLength(
+  meditation: Meditation,
+  durationMinutes: number,
+): Promise<number> {
+  if (!meditation.breathing_exercise_id || !meditation.voice_id) return 0;
+
+  const { data } = await db()
+    .from("omtana_breathing_renders")
+    .select("seconds")
+    .eq("exercise_id", meditation.breathing_exercise_id)
+    .eq("voice_id", meditation.voice_id)
+    .eq("locale", meditation.locale)
+    .eq("slot_seconds", breathingSlotSeconds(durationMinutes))
+    .maybeSingle();
+
+  return (data as Pick<BreathingRender, "seconds"> | null)?.seconds ?? 0;
 }
 
 /** Reparte las palabras clave por el cuerpo de la sesión, sin tocar los extremos. */

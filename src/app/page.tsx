@@ -6,14 +6,20 @@ import { Faq } from "@/components/Faq";
 import { SiteFooter } from "@/components/SiteFooter";
 import { PlanCards } from "@/components/PlanCards";
 import { currentUser } from "@/lib/auth";
-import { planSession } from "@/lib/session-plan";
+import { planOutline, sectionMinutes } from "@/lib/session-plan";
+import { breathingSlotSeconds } from "@/lib/breathing";
 import { getLang } from "@/lib/lang";
 import { copy, sectionLabel } from "@/lib/i18n";
 
 export default async function LandingPage() {
   const [user, lang] = await Promise.all([currentUser(), getLang()]);
   const t = copy(lang);
-  const anatomy = planSession(15);
+  // La portada muestra el reparto con una respiración genérica: el ejercicio
+  // concreto se elige al personalizar, pero el hueco que ocupa es este.
+  const anatomy = planOutline(15, {
+    label: "Respiración guiada",
+    seconds: breathingSlotSeconds(15),
+  });
 
   return (
     <main>
@@ -64,7 +70,7 @@ export default async function LandingPage() {
             <div className="om-label mb-[22px]">{t.breathing.cardTitle}</div>
             <div className="flex flex-col gap-[14px]">
               {anatomy.map((s) => (
-                <div key={s.position} className="flex items-center gap-[14px]">
+                <div key={s.key} className="flex items-center gap-[14px]">
                   <span
                     className="h-2 w-2 flex-none rounded-full"
                     style={{
@@ -74,7 +80,7 @@ export default async function LandingPage() {
                   />
                   <span className="mr-auto text-[16px]">{sectionLabel(lang, s.label)}</span>
                   <span className="text-[14px] text-faint">
-                    {s.minutes} {t.common.minutes}
+                    {sectionMinutes(s)} {t.common.minutes}
                   </span>
                 </div>
               ))}

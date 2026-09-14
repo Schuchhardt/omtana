@@ -1,3 +1,4 @@
+import type { BreathingCue, BreathingStep } from "./breathing";
 import type { LedgerReason, Translatable } from "./i18n";
 
 export type Plan = "free" | "pro";
@@ -76,6 +77,11 @@ export interface Meditation {
   template_id: string | null;
   voice_id: string | null;
   music_track_id: string | null;
+  breathing_exercise_id: string | null;
+  /** Hueco que la sesión le reservó a la respiración al crearla. */
+  breathing_slot_seconds: number;
+  /** 1: la respiración venía dentro del audio. 2: va aparte y es opcional. */
+  plan_version: number;
   title: string;
   intention_text: string;
   context_text: string;
@@ -106,6 +112,38 @@ export interface MeditationSegment {
 export interface Cue {
   at_seconds: number;
   word: string;
+}
+
+/**
+ * Un ejercicio de respiración ya armado para una voz, un idioma y un hueco.
+ *
+ * `timeline` y `steps` vienen de `planBreathing`: se guardan con el audio para
+ * que el reproductor anime exactamente lo que se grabó, aunque el ejercicio
+ * cambie después en el banco.
+ */
+export interface BreathingRender {
+  id: string;
+  exercise_id: string;
+  voice_id: string;
+  locale: string;
+  slot_seconds: number;
+  cycles: number;
+  seconds: number;
+  audio_path: string;
+  timeline: BreathingCue[];
+  steps: BreathingStep[];
+  checked_at: string | null;
+  check_report: BreathingCheck | null;
+}
+
+export interface BreathingCheck {
+  totalSeconds: number;
+  expectedSeconds: number;
+  maxDriftSeconds: number;
+  cuesChecked: number;
+  /** Señales que suenan pegadas a la anterior: a un conteo por segundo, normal. */
+  cuesGlued: number;
+  problems: string[];
 }
 
 export interface LedgerEntry extends LedgerReason {

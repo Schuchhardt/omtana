@@ -4,7 +4,12 @@ import type { Metadata } from "next";
 import { Customizer } from "./Customizer";
 import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
-import { listMusic, listVoices, remainingFree } from "@/lib/queries";
+import {
+  listBreathingExercises,
+  listBreathingOptions,
+  listVoices,
+  remainingFree,
+} from "@/lib/queries";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
@@ -24,7 +29,7 @@ export default async function PersonalizarPage({
   const t = copy(lang);
   const intention = params.intencion?.trim() || t.customize.defaultIntention;
 
-  const [voices, music] = await Promise.all([listVoices(), listMusic()]);
+  const [voices, exercises] = await Promise.all([listVoices(), listBreathingExercises()]);
 
   // Prioridad: la voz que viene en la URL, la preferida del perfil, la primera del banco.
   const fromUrl = params.voz ? voices.find((v) => v.slug === params.voz || v.id === params.voz) : null;
@@ -34,6 +39,9 @@ export default async function PersonalizarPage({
       ? user.default_voice_id
       : (voices[0]?.id ?? ""));
 
+  // La respiración se ofrece por voz: el audio está grabado con una voz concreta.
+  const breathingOptions = await listBreathingOptions(selectedVoiceId);
+
   return (
     <main>
       <Suspense fallback={<div className="om-shell py-24 text-muted">{t.common.loading}</div>}>
@@ -41,7 +49,8 @@ export default async function PersonalizarPage({
           intention={intention}
           intentionSlug={params.i ?? null}
           voices={voices}
-          music={music}
+          exercises={exercises}
+          breathingOptions={breathingOptions}
           selectedVoiceId={selectedVoiceId}
           plan={user.plan}
           freeLeft={remainingFree(user)}

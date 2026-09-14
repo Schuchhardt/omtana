@@ -13,6 +13,7 @@
     "voices:link": "tsx --conditions=react-server scripts/voices-link.ts",
     "samples": "tsx --conditions=react-server scripts/samples.ts",
     "generate": "tsx --conditions=react-server scripts/generate.ts",
+    "respiracion": "tsx --conditions=react-server scripts/breathing.ts",
     "video": "tsx --conditions=react-server scripts/export-video.ts",
     "setup": "npm run db:push && npm run seed"
   },

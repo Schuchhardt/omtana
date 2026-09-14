@@ -3,6 +3,8 @@
  *
  *   npm run generate -- --intencion "Dormir sin dar vueltas" --duracion 10 --voz aurora
  *   npm run generate -- --i dormir-sin-dar-vueltas --contexto "Me despierto a las 4"
+ *   npm run generate -- --respiracion caja-4-4-4-4   abre con ese ejercicio
+ *   npm run generate -- --sin-respiracion            entra directo al cuerpo
  *   npm run generate -- --curated                 pregenera todo el banco, público
  *   npm run generate -- --curated --duracion 10   solo esa duración
  *   npm run generate -- --retry                   reintenta las que fallaron
@@ -15,8 +17,16 @@ import { log, requireEnv, parseArgs, fatal } from "./_bootstrap";
 import { db } from "../src/lib/supabase";
 import { ensureBucket } from "../src/lib/storage";
 import { generateMeditation } from "../src/lib/generation/pipeline";
+import { breathingSlotSeconds, type BreathingExercise } from "../src/lib/breathing";
 import { DURATIONS } from "../src/lib/config";
 import type { Intention, Meditation, MusicTrack, Voice } from "../src/lib/types";
+
+/** Los ejercicios que existen grabados con una voz, por idioma y hueco. */
+interface BreathingOption {
+  exercise_id: string;
+  locale: string;
+  slot_seconds: number;
+}
 
 async function main() {
   requireEnv(
@@ -29,13 +39,15 @@ async function main() {
   const args = parseArgs();
   await ensureBucket();
 
-  const [voices, music, intentions] = await Promise.all([
+  const [voices, music, intentions, exercises] = await Promise.all([
     db().from("omtana_voices").select("*").eq("active", true).order("sort")
       .then((r) => (r.data as Voice[]) ?? []),
     db().from("omtana_music_tracks").select("*").eq("active", true)
       .then((r) => (r.data as MusicTrack[]) ?? []),
     db().from("omtana_intentions").select("*").eq("active", true).order("sort")
       .then((r) => (r.data as Intention[]) ?? []),
+    db().from("omtana_breathing_exercises").select("*").eq("active", true).order("sort")
+      .then((r) => (r.data as BreathingExercise[]) ?? []),
   ]);
 
   const linked = voices.filter((v) => v.provider_voice_id);
@@ -44,8 +56,8 @@ async function main() {
   }
 
   if (args.flags.has("retry")) return retry();
-  if (args.flags.has("curated")) return curated(args, linked, music, intentions);
-  return single(args, linked, music, intentions);
+  if (args.flags.has("curated")) return curated(args, linked, music, intentions, exercises);
+  return single(args, linked, music, intentions, exercises);
 }
 
 /* ───────────────────────── una meditación ───────────────────────── */
@@ -55,6 +67,7 @@ async function single(
   voices: Voice[],
   music: MusicTrack[],
   intentions: Intention[],
+  exercises: BreathingExercise[],
 ) {
   const slug = args.values.get("i");
   const fromBank = slug ? intentions.find((it) => it.slug === slug) : undefined;
@@ -82,8 +95,13 @@ async function single(
     log.warn("--privada sin usuario dueño: no aparecerá en el catálogo ni en ninguna biblioteca.");
   }
 
+  const breathing = await pickBreathing(args, exercises, voice, locale, duration);
+
   log.title(`Generando: ${intention}`);
-  log.info(`${duration} min · ${voice.name} · ${track?.name ?? "sin música"} · ${locale}`);
+  log.info(
+    `${duration} min · ${voice.name} · ${locale} · ` +
+      `respiración ${breathing?.slug ?? "ninguna"} · ${track?.name ?? "sin música"}`,
+  );
 
   const id = await createMeditation({
     intentionId: fromBank?.id ?? null,
@@ -94,6 +112,7 @@ async function single(
     duration,
     voiceId: voice.id,
     musicId: track?.id ?? null,
+    breathingId: breathing?.id ?? null,
     visibility,
     source: "curated",
   });
@@ -109,6 +128,7 @@ async function curated(
   voices: Voice[],
   music: MusicTrack[],
   intentions: Intention[],
+  exercises: BreathingExercise[],
 ) {
   if (intentions.length === 0) fatal("No hay intenciones. Corre primero: npm run seed");
 
@@ -158,6 +178,7 @@ async function curated(
     log.step(tag);
 
     try {
+      const breathing = await pickBreathing(args, exercises, voice, locale, job.duration);
       const id = await createMeditation({
         intentionId: job.intention.id,
         title: job.intention.title,
@@ -167,6 +188,7 @@ async function curated(
         duration: job.duration,
         voiceId: voice.id,
         musicId: track?.id ?? null,
+        breathingId: breathing?.id ?? null,
         visibility: "public",
         source: "curated",
       });
@@ -220,6 +242,7 @@ interface CreateInput {
   duration: number;
   voiceId: string;
   musicId: string | null;
+  breathingId: string | null;
   visibility: "private" | "public";
   source: "curated" | "user";
 }
@@ -231,6 +254,8 @@ async function createMeditation(input: CreateInput): Promise<string> {
       intention_id: input.intentionId,
       voice_id: input.voiceId,
       music_track_id: input.musicId,
+      breathing_exercise_id: input.breathingId,
+      breathing_slot_seconds: breathingSlotSeconds(input.duration),
       title: input.title.slice(0, 90),
       intention_text: input.intentionText,
       context_text: input.context,
@@ -277,11 +302,67 @@ function pickVoice(voices: Voice[], slug: string | undefined): Voice {
   return found;
 }
 
+/**
+ * Música mezclada dentro del archivo, solo si se pide.
+ *
+ * Antes venía por defecto. Dejó de venir cuando el reproductor aprendió a
+ * ponerla en vivo: mezclada adentro no se puede bajar ni cambiar, y una sesión
+ * sin música sirve para las dos cosas.
+ */
 function pickMusic(music: MusicTrack[], slug: string | undefined): MusicTrack | null {
-  if (slug === "ninguna") return null;
-  if (!slug) return music[0] ?? null;
+  if (!slug || slug === "ninguna") return null;
   const found = music.find((m) => m.slug === slug);
   if (!found) fatal(`No hay música con slug "${slug}". Disponibles: ${music.map((m) => m.slug).join(", ")}`);
+  return found;
+}
+
+/**
+ * Con qué ejercicio abre la sesión.
+ *
+ * Solo sirve lo que ya está grabado con esta voz, este idioma y este hueco: el
+ * audio de la respiración se pregenera a mano con `npm run respiracion`, y una
+ * sesión que apunte a un ejercicio sin grabar abriría en silencio.
+ */
+async function pickBreathing(
+  args: ReturnType<typeof parseArgs>,
+  exercises: BreathingExercise[],
+  voice: Voice,
+  locale: string,
+  duration: number,
+): Promise<BreathingExercise | null> {
+  if (args.flags.has("sin-respiracion")) return null;
+
+  const slug = args.values.get("respiracion");
+  if (slug === "ninguna") return null;
+
+  const slot = breathingSlotSeconds(duration);
+  const { data } = await db()
+    .from("omtana_breathing_renders")
+    .select("exercise_id, locale, slot_seconds")
+    .eq("voice_id", voice.id)
+    .eq("locale", locale)
+    .eq("slot_seconds", slot);
+
+  const grabados = new Set(((data as BreathingOption[]) ?? []).map((r) => r.exercise_id));
+  const disponibles = exercises.filter((e) => grabados.has(e.id));
+
+  if (disponibles.length === 0) {
+    log.warn(
+      `Sin respiración grabada para ${voice.slug}/${locale}/${slot}s. ` +
+        `Grábala con: npm run respiracion -- --voz ${voice.slug}`,
+    );
+    return null;
+  }
+
+  if (!slug) return disponibles[0];
+
+  const found = disponibles.find((e) => e.slug === slug);
+  if (!found) {
+    fatal(
+      `No hay "${slug}" grabado para esta voz y duración. ` +
+        `Disponibles: ${disponibles.map((e) => e.slug).join(", ")}`,
+    );
+  }
   return found;
 }
 

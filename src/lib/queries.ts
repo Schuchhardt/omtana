@@ -1,7 +1,9 @@
 import "server-only";
 import { db, isConfigured } from "./supabase";
 import { PLAN } from "./config";
+import type { BreathingExercise } from "./breathing";
 import type {
+  BreathingRender,
   Cue,
   Intention,
   LedgerEntry,
@@ -40,6 +42,64 @@ export async function listMusic(): Promise<MusicTrack[]> {
     .eq("active", true)
     .order("name");
   return (data as MusicTrack[]) ?? [];
+}
+
+/* ───────────────────────────── respiración ───────────────────────────── */
+
+export async function listBreathingExercises(): Promise<BreathingExercise[]> {
+  if (!isConfigured()) return [];
+  const { data } = await db()
+    .from("omtana_breathing_exercises")
+    .select("*")
+    .eq("active", true)
+    .order("sort");
+  return (data as BreathingExercise[]) ?? [];
+}
+
+/** Lo mínimo para saber qué ejercicio se puede ofrecer y cuánto ocupa. */
+export interface BreathingOption {
+  exercise_id: string;
+  locale: string;
+  slot_seconds: number;
+  seconds: number;
+}
+
+/**
+ * Los ejercicios que existen grabados con una voz.
+ *
+ * El personalizador cambia de idioma y de duración sin recargar, así que se
+ * lleva la matriz entera de esa voz — son unas pocas decenas de filas — y no
+ * ofrece nunca un ejercicio que después no tendría audio.
+ */
+export async function listBreathingOptions(voiceId: string | null): Promise<BreathingOption[]> {
+  if (!isConfigured() || !voiceId) return [];
+  const { data } = await db()
+    .from("omtana_breathing_renders")
+    .select("exercise_id, locale, slot_seconds, seconds")
+    .eq("voice_id", voiceId);
+  return (data as BreathingOption[]) ?? [];
+}
+
+export type BreathingRenderWithExercise = BreathingRender & { exercise: BreathingExercise | null };
+
+/** Los ejercicios grabados que le sirven a una sesión ya generada. */
+export async function listBreathingRenders(
+  voiceId: string | null,
+  locale: string,
+  slotSeconds: number,
+): Promise<BreathingRenderWithExercise[]> {
+  if (!isConfigured() || !voiceId || slotSeconds <= 0) return [];
+  const { data } = await db()
+    .from("omtana_breathing_renders")
+    .select("*, exercise:omtana_breathing_exercises(*)")
+    .eq("voice_id", voiceId)
+    .eq("locale", locale)
+    .eq("slot_seconds", slotSeconds);
+
+  const rows = (data as BreathingRenderWithExercise[]) ?? [];
+  return rows
+    .filter((r) => r.exercise?.active)
+    .sort((a, b) => (a.exercise?.sort ?? 0) - (b.exercise?.sort ?? 0));
 }
 
 export async function getVoice(id: string | null): Promise<Voice | null> {

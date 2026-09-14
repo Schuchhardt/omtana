@@ -2,10 +2,31 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BreathingGuide } from "./BreathingGuide";
 import { LiveWave } from "@/components/LiveWave";
 import { formatClock } from "@/lib/format";
-import type { Copy } from "@/lib/i18n";
+import { fill, type Copy } from "@/lib/i18n";
+import { useMix } from "@/lib/player-mix";
+import type { BreathingStep } from "@/lib/breathing";
 import type { Cue, MeditationSegment } from "@/lib/types";
+
+/** Una pista de fondo ya firmada, lista para sonar en el navegador. */
+export interface PlayerTrack {
+  id: string;
+  name: string;
+  url: string;
+}
+
+/** Un ejercicio de respiración grabado para esta voz, con su grilla de tiempo. */
+export interface PlayerBreathing {
+  id: string;
+  name: string;
+  summary: string;
+  seconds: number;
+  cycles: number;
+  url: string;
+  steps: BreathingStep[];
+}
 
 interface Props {
   id: string;
@@ -16,13 +37,24 @@ interface Props {
   durationSeconds: number;
   segments: MeditationSegment[];
   cues: Cue[];
+  tracks: PlayerTrack[];
+  breathing: PlayerBreathing[];
+  /** El ejercicio con el que se generó la sesión; es el que viene puesto. */
+  breathingId: string | null;
+  /** La sesión ya salió de la fábrica con música mezclada en el archivo. */
+  bakedMusic: boolean;
   owned: boolean;
   t: Copy["player"];
 }
 
+/** Milisegundos de entrada y salida de la música: un corte seco rompe la sesión. */
+const FADE_MS = 1200;
+
 export function Player(props: Props) {
   const t = props.t;
   const audio = useRef<HTMLAudioElement>(null);
+  const music = useRef<HTMLAudioElement>(null);
+  const breath = useRef<HTMLAudioElement>(null);
   const reported = useRef(false);
 
   const [status, setStatus] = useState(props.initialStatus);
@@ -34,6 +66,30 @@ export function Player(props: Props) {
 
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+
+  /*
+   * La respiración es una pista aparte que va antes de la meditación, no un
+   * tramo del archivo. Por eso se puede cambiar o saltar acá mismo sin
+   * regenerar nada: son dos audios, no uno.
+   */
+  const [exerciseId, setExerciseId] = useState<string | null>(props.breathingId);
+  const [breathingDone, setBreathingDone] = useState(false);
+  const [breathElapsed, setBreathElapsed] = useState(0);
+
+  /*
+   * La mezcla: qué pista de fondo suena y a qué volumen cada capa. Los
+   * volúmenes y la pista son preferencias guardadas; que esté sonando o no es
+   * de esta sesión, y empieza en silencio porque el navegador no deja sonar
+   * nada antes de que la persona toque algo.
+   */
+  const [{ voiceVolume, musicVolume, trackId }, setMix] = useMix();
+  const [musicOn, setMusicOn] = useState(false);
+  const [panel, setPanel] = useState<"breathing" | "music" | null>(null);
+
+  const track = props.tracks.find((x) => x.id === trackId) ?? null;
+  const exercise = props.breathing.find((x) => x.id === exerciseId) ?? null;
+  const stage: "breathing" | "meditation" =
+    exercise && !breathingDone ? "breathing" : "meditation";
 
   /* Mientras se genera, preguntamos por el estado cada dos segundos. */
   useEffect(() => {
@@ -84,21 +140,160 @@ export function Player(props: Props) {
     };
   }, [report]);
 
+  /* ─────────────────────────── la mezcla ─────────────────────────── */
+
+  useEffect(() => {
+    // La respiración es la misma voz: comparte su control de volumen.
+    if (audio.current) audio.current.volume = voiceVolume;
+    if (breath.current) breath.current.volume = voiceVolume;
+  }, [voiceVolume, audioUrl, exercise]);
+
+  const fade = useRef<ReturnType<typeof setInterval> | null>(null);
+  /* El volumen al que apunta el fundido, sin reiniciar la música al moverlo. */
+  const musicTarget = useRef(musicVolume);
+  useEffect(() => {
+    musicTarget.current = musicVolume;
+  }, [musicVolume]);
+
+  const stopFade = useCallback(() => {
+    if (fade.current === null) return;
+    clearInterval(fade.current);
+    fade.current = null;
+  }, []);
+
+  /**
+   * Lleva la música hasta `to` en FADE_MS y recién ahí llama a `then`.
+   *
+   * Con reloj y no con `requestAnimationFrame`: en una pestaña en segundo plano
+   * los cuadros se congelan y el fundido quedaba a medias — la música muda, o
+   * sonando para siempre porque nunca llegaba el `pause`. El temporizador ahí
+   * se frena a un tic por segundo, así que el fundido termina igual.
+   */
+  const fadeMusic = useCallback(
+    (to: number, then?: () => void) => {
+      const el = music.current;
+      if (!el) return;
+      stopFade();
+
+      const from = el.volume;
+      const start = performance.now();
+
+      fade.current = setInterval(() => {
+        const k = Math.min(1, (performance.now() - start) / FADE_MS);
+        el.volume = clamp(from + (to - from) * k);
+        if (k < 1) return;
+        stopFade();
+        then?.();
+      }, 40);
+    },
+    [stopFade],
+  );
+
+  /* El elemento de música sigue a la intención: `musicOn` y la pista elegida. */
+  useEffect(() => {
+    const el = music.current;
+    if (!el) return;
+
+    if (!musicOn || !track) {
+      if (!el.paused) fadeMusic(0, () => el.pause());
+      return;
+    }
+
+    // Cambiar de pista aborta el `play()` anterior: esa promesa llega rechazada
+    // y sin esta bandera apagaría la música que la persona acaba de elegir.
+    let stale = false;
+    el.volume = 0;
+    void el
+      .play()
+      .then(() => {
+        if (!stale) fadeMusic(musicTarget.current);
+      })
+      // Autoplay bloqueado o pista caída: se apaga en vez de mentir con el botón.
+      .catch(() => {
+        if (!stale) setMusicOn(false);
+      });
+
+    return () => {
+      stale = true;
+    };
+  }, [musicOn, track, fadeMusic]);
+
+  /* Mover el control manda sobre cualquier fundido en curso. */
+  useEffect(() => {
+    const el = music.current;
+    if (!el || el.paused) return;
+    stopFade();
+    el.volume = musicVolume;
+  }, [musicVolume, stopFade]);
+
+  useEffect(() => stopFade, [stopFade]);
+
+  /* ─────────────────────────── el transporte ─────────────────────────── */
+
+  /** Cambiar de ejercicio mientras suena: el nuevo arranca desde cero. */
+  const resume = useRef(false);
+  useEffect(() => {
+    if (!resume.current) return;
+    resume.current = false;
+    void breath.current?.play().catch(() => undefined);
+  }, [exerciseId]);
+
   const phase = phaseLabel(t, props.segments, elapsed, duration);
   const keyword = currentCue(props.cues, elapsed);
-  const progress = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+
+  /*
+   * El reloj es de la sesión completa, no del archivo: la respiración y la
+   * meditación son dos pistas, pero para quien escucha son una sola cosa.
+   */
+  const breathingSeconds = exercise?.seconds ?? 0;
+  const sessionSeconds = breathingSeconds + duration;
+  const sessionElapsed =
+    stage === "breathing" ? breathElapsed : breathingSeconds + elapsed;
+  const progress =
+    sessionSeconds > 0 ? Math.min(100, (sessionElapsed / sessionSeconds) * 100) : 0;
 
   function toggle() {
-    const el = audio.current;
+    const el = stage === "breathing" ? breath.current : audio.current;
     if (!el) return;
-    if (el.paused) void el.play();
-    else el.pause();
+    if (el.paused) {
+      void el.play();
+      if (track) setMusicOn(true);
+    } else {
+      el.pause();
+      setMusicOn(false);
+    }
   }
 
   function seek(delta: number) {
     const el = audio.current;
     if (!el) return;
     el.currentTime = Math.max(0, Math.min(el.duration || duration, el.currentTime + delta));
+  }
+
+  /** La respiración termina — o alguien la salta — y la meditación sigue sola. */
+  function startMeditation(play: boolean) {
+    breath.current?.pause();
+    setBreathingDone(true);
+    if (play) void audio.current?.play().catch(() => undefined);
+  }
+
+  function chooseExercise(id: string | null) {
+    resume.current = !!breath.current && !breath.current.paused;
+    setExerciseId(id);
+
+    // Si la meditación todavía no empezó, la respiración nueva vuelve al frente.
+    if (id && (audio.current?.currentTime ?? 0) === 0) setBreathingDone(false);
+    if (!id) setBreathingDone(true);
+  }
+
+  /** Tocar la pista que ya está elegida la pausa o la retoma. */
+  function chooseTrack(id: string) {
+    if (id === trackId) {
+      setMusicOn(!musicOn);
+      return;
+    }
+    setMix({ trackId: id });
+    setMusicOn(true);
   }
 
   return (
@@ -114,13 +309,13 @@ export function Player(props: Props) {
 
       <div className="relative flex w-full max-w-[760px] flex-col items-center">
         <p className="mb-4 text-[13px] uppercase tracking-[0.2em] text-faint">
-          {status === "ready" ? phase : t.generating}
+          {status !== "ready" ? t.generating : stage === "breathing" ? t.phaseBreathing : phase}
         </p>
         <h1 className="mb-[10px] text-center text-[clamp(28px,4.2vw,44px)] font-light">
           {title}
         </h1>
         <p className="mb-14 text-[16px] text-muted-soft">
-          {props.voiceName} · {formatClock(duration)}
+          {props.voiceName} · {formatClock(sessionSeconds)}
         </p>
 
         {status === "failed" ? (
@@ -143,22 +338,38 @@ export function Player(props: Props) {
           </div>
         ) : (
           <>
-            <LiveWave audio={audio} playing={playing} />
+            {stage === "breathing" && exercise ? (
+              <BreathingGuide
+                audio={breath}
+                steps={exercise.steps}
+                playing={playing}
+                title={exercise.name}
+                t={t}
+              />
+            ) : (
+              <LiveWave audio={audio} playing={playing} />
+            )}
 
             <div className="mb-9 flex min-h-[52px] items-center">
-              {keyword && (
-                <p
-                  key={keyword}
-                  className="animate-fade-up text-[22px] font-light tracking-[0.04em] text-muted"
-                >
-                  {keyword}
+              {stage === "breathing" && exercise ? (
+                <p className="text-[15px] text-faint">
+                  {fill(t.breathingCycles, { n: exercise.cycles })}
                 </p>
+              ) : (
+                keyword && (
+                  <p
+                    key={keyword}
+                    className="animate-fade-up text-[22px] font-light tracking-[0.04em] text-muted"
+                  >
+                    {keyword}
+                  </p>
+                )
               )}
             </div>
 
             <div className="mb-9 flex w-full max-w-[520px] items-center gap-4">
               <span className="flex-none text-[14px] tabular-nums text-faint">
-                {formatClock(elapsed)}
+                {formatClock(sessionElapsed)}
               </span>
               <div className="h-0.5 flex-1 overflow-hidden rounded-[2px] bg-[#e2d6c4]">
                 <div
@@ -167,19 +378,21 @@ export function Player(props: Props) {
                 />
               </div>
               <span className="flex-none text-[14px] tabular-nums text-faint">
-                {formatClock(duration)}
+                {formatClock(sessionSeconds)}
               </span>
             </div>
 
-            <div className="mb-11 flex items-center gap-[22px]">
-              <button
-                type="button"
-                onClick={() => seek(-15)}
-                aria-label={t.back15}
-                className="h-[52px] w-[52px] cursor-pointer rounded-full border border-line-pill bg-transparent text-[13px] text-ink-soft hover:border-clay-tint"
-              >
-                −15
-              </button>
+            <div className="mb-6 flex items-center gap-[22px]">
+              {stage === "meditation" && (
+                <button
+                  type="button"
+                  onClick={() => seek(-15)}
+                  aria-label={t.back15}
+                  className="h-[52px] w-[52px] cursor-pointer rounded-full border border-line-pill bg-transparent text-[13px] text-ink-soft hover:border-clay-tint"
+                >
+                  −15
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggle}
@@ -188,14 +401,78 @@ export function Player(props: Props) {
               >
                 {playing ? "❚❚" : "▶"}
               </button>
-              <button
-                type="button"
-                onClick={() => seek(15)}
-                aria-label={t.forward15}
-                className="h-[52px] w-[52px] cursor-pointer rounded-full border border-line-pill bg-transparent text-[13px] text-ink-soft hover:border-clay-tint"
-              >
-                +15
-              </button>
+              {stage === "meditation" && (
+                <button
+                  type="button"
+                  onClick={() => seek(15)}
+                  aria-label={t.forward15}
+                  className="h-[52px] w-[52px] cursor-pointer rounded-full border border-line-pill bg-transparent text-[13px] text-ink-soft hover:border-clay-tint"
+                >
+                  +15
+                </button>
+              )}
+            </div>
+
+            <div className="mb-10 flex min-h-[24px] items-center">
+              {stage === "breathing" && (
+                <button
+                  type="button"
+                  onClick={() => startMeditation(playing)}
+                  className="cursor-pointer border-none bg-transparent text-[14px] text-muted-soft underline-offset-4 hover:text-ink hover:underline"
+                >
+                  {t.breathingSkip}
+                </button>
+              )}
+            </div>
+
+            <div className="mb-11 w-full max-w-[520px]">
+              <div className="flex flex-wrap justify-center gap-[10px]">
+                {props.breathing.length > 0 && (
+                  <PanelToggle
+                    label={exercise ? `${t.breathingTitle} · ${exercise.name}` : t.breathingTitle}
+                    lit={stage === "breathing"}
+                    open={panel === "breathing"}
+                    onClick={() => setPanel((p) => (p === "breathing" ? null : "breathing"))}
+                  />
+                )}
+                {props.tracks.length > 0 && (
+                  <PanelToggle
+                    label={track ? `${t.musicTitle} · ${track.name}` : t.musicTitle}
+                    lit={musicOn}
+                    open={panel === "music"}
+                    onClick={() => setPanel((p) => (p === "music" ? null : "music"))}
+                  />
+                )}
+              </div>
+
+              {panel === "breathing" && (
+                <BreathingPanel
+                  t={t}
+                  options={props.breathing}
+                  exercise={exercise}
+                  onChoose={chooseExercise}
+                />
+              )}
+
+              {panel === "music" && (
+                <Mixer
+                  t={t}
+                  tracks={props.tracks}
+                  track={track}
+                  musicOn={musicOn}
+                  bakedMusic={props.bakedMusic}
+                  voiceVolume={voiceVolume}
+                  musicVolume={musicVolume}
+                  onChooseTrack={chooseTrack}
+                  onClearTrack={() => {
+                    setMusicOn(false);
+                    setMix({ trackId: null });
+                  }}
+                  onToggleMusic={() => setMusicOn((on) => !on)}
+                  onVoiceVolume={(v) => setMix({ voiceVolume: v })}
+                  onMusicVolume={(v) => setMix({ musicVolume: v })}
+                />
+              )}
             </div>
 
             <div className="flex flex-wrap justify-center gap-[10px]">
@@ -211,6 +488,22 @@ export function Player(props: Props) {
                 {t.generateAnother}
               </Link>
             </div>
+
+            {/*
+              La respiración: su propia pista, con la grilla que anima el
+              círculo. Al terminar, la meditación sigue sola.
+            */}
+            {exercise && (
+              <audio
+                ref={breath}
+                src={exercise.url}
+                preload="auto"
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onTimeUpdate={(e) => setBreathElapsed(e.currentTarget.currentTime)}
+                onEnded={() => startMeditation(true)}
+              />
+            )}
 
             {audioUrl && (
               <audio
@@ -228,15 +521,209 @@ export function Player(props: Props) {
                 }}
                 onEnded={() => {
                   setPlaying(false);
+                  setMusicOn(false);
                   report(true);
                 }}
               />
             )}
+
+            {/*
+              La música vive en su propio elemento, en loop y sin analizador:
+              la onda sigue a la voz, que es lo que la persona está siguiendo.
+            */}
+            <audio ref={music} src={track?.url} loop preload="none" />
           </>
         )}
       </div>
     </div>
   );
+}
+
+/* ─────────────────────────── los paneles ─────────────────────────── */
+
+function PanelToggle({
+  label,
+  lit,
+  open,
+  onClick,
+}: {
+  label: string;
+  lit: boolean;
+  open: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={open}
+      className="om-btn om-btn-ghost om-btn-sm"
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full transition-colors"
+        style={{ background: lit ? "var(--color-clay)" : "var(--color-line-strong)" }}
+        aria-hidden="true"
+      />
+      {label}
+    </button>
+  );
+}
+
+function BreathingPanel({
+  t,
+  options,
+  exercise,
+  onChoose,
+}: {
+  t: Copy["player"];
+  options: PlayerBreathing[];
+  exercise: PlayerBreathing | null;
+  onChoose: (id: string | null) => void;
+}) {
+  return (
+    <div className="om-card mt-4 px-6 py-6">
+      <div className="mb-[14px] flex items-center gap-4">
+        <div className="om-label">{t.breathingTitle}</div>
+        <p className="text-[13px] text-faint">{t.breathingNote}</p>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-[8px]">
+        {options.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onChoose(option.id)}
+            data-active={exercise?.id === option.id}
+            aria-pressed={exercise?.id === option.id}
+            className="om-pill !px-[14px] !text-[14px]"
+          >
+            {option.name} · {formatClock(option.seconds)}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChoose(null)}
+          data-active={!exercise}
+          aria-pressed={!exercise}
+          className="om-pill !px-[14px] !text-[14px]"
+        >
+          {t.breathingNone}
+        </button>
+      </div>
+
+      {exercise && (
+        <p className="text-[13px] leading-[1.55] text-faint">{exercise.summary}</p>
+      )}
+    </div>
+  );
+}
+
+interface MixerProps {
+  t: Copy["player"];
+  tracks: PlayerTrack[];
+  track: PlayerTrack | null;
+  musicOn: boolean;
+  bakedMusic: boolean;
+  voiceVolume: number;
+  musicVolume: number;
+  onChooseTrack: (id: string) => void;
+  onClearTrack: () => void;
+  onToggleMusic: () => void;
+  onVoiceVolume: (v: number) => void;
+  onMusicVolume: (v: number) => void;
+}
+
+function Mixer(p: MixerProps) {
+  const { t } = p;
+
+  return (
+    <div className="om-card mt-4 px-6 py-6">
+      <div className="mb-[14px] flex items-center gap-4">
+        <div className="om-label">{t.musicTitle}</div>
+        <p className="mr-auto text-[13px] text-faint">{t.musicSubtitle}</p>
+        <button
+          type="button"
+          onClick={p.onToggleMusic}
+          disabled={!p.track}
+          aria-label={p.musicOn ? t.musicPause : t.musicPlay}
+          className="flex h-9 w-9 flex-none cursor-pointer items-center justify-center rounded-full border border-line-pill bg-transparent text-[12px] text-ink-soft hover:border-clay-tint disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {p.musicOn ? "❚❚" : "▶"}
+        </button>
+      </div>
+
+      <div className="mb-6 flex max-h-[152px] flex-wrap gap-[8px] overflow-y-auto">
+        {p.tracks.map((track) => (
+          <button
+            key={track.id}
+            type="button"
+            onClick={() => p.onChooseTrack(track.id)}
+            data-active={p.track?.id === track.id}
+            aria-pressed={p.track?.id === track.id}
+            className="om-pill !px-[14px] !text-[14px]"
+          >
+            {track.name}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={p.onClearTrack}
+          data-active={!p.track}
+          aria-pressed={!p.track}
+          className="om-pill !px-[14px] !text-[14px]"
+        >
+          {t.musicNone}
+        </button>
+      </div>
+
+      <Volume label={t.volumeVoice} value={p.voiceVolume} onChange={p.onVoiceVolume} />
+      <Volume
+        label={t.volumeMusic}
+        value={p.musicVolume}
+        onChange={p.onMusicVolume}
+        disabled={!p.track}
+      />
+
+      {p.bakedMusic && (
+        <p className="mt-4 text-[13px] leading-[1.5] text-faint">{t.musicBakedNote}</p>
+      )}
+    </div>
+  );
+}
+
+function Volume({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="mb-[14px] flex items-center gap-4 last:mb-0">
+      <span className="w-[68px] flex-none text-[14px] text-muted">{label}</span>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.01}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="om-range flex-1 disabled:opacity-40"
+      />
+      <span className="w-[42px] flex-none text-right text-[13px] tabular-nums text-faint">
+        {Math.round(value * 100)}%
+      </span>
+    </label>
+  );
+}
+
+function clamp(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function phaseLabel(
@@ -249,8 +736,7 @@ function phaseLabel(
     .reverse()
     .find((s) => elapsed >= s.start_offset_seconds);
 
-  if (!active) return t.phaseBreathing;
-  if (active.position === 0) return t.phaseBreathing;
+  if (!active) return t.phaseBody;
   if (elapsed > total - 90) return t.phaseClosing;
   return active.kind === "dynamic" ? t.phaseYourSegment : t.phaseBody;
 }

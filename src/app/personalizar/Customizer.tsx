@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { planSession, planTotals } from "@/lib/session-plan";
+import { planOutline, planTotals, planSession } from "@/lib/session-plan";
+import { breathingSlotSeconds, type BreathingExercise } from "@/lib/breathing";
+import { formatClock } from "@/lib/format";
 import { DURATIONS, LOCALES, CREDIT_COST_PER_MEDITATION } from "@/lib/config";
+import type { BreathingOption } from "@/lib/queries";
 import {
   copy,
   fill,
@@ -15,13 +18,15 @@ import {
   type Copy,
   type UiLang,
 } from "@/lib/i18n";
-import type { MusicTrack, Voice } from "@/lib/types";
+import type { Voice } from "@/lib/types";
 
 interface Props {
   intention: string;
   intentionSlug: string | null;
   voices: Voice[];
-  music: MusicTrack[];
+  exercises: BreathingExercise[];
+  /** Qué ejercicios existen grabados con la voz elegida. */
+  breathingOptions: BreathingOption[];
   selectedVoiceId: string;
   plan: "free" | "pro";
   freeLeft: number;
@@ -35,7 +40,8 @@ export function Customizer({
   intention,
   intentionSlug,
   voices,
-  music,
+  exercises,
+  breathingOptions,
   selectedVoiceId,
   plan,
   freeLeft,
@@ -52,15 +58,50 @@ export function Customizer({
   const [context, setContext] = useState(params.get("contexto") ?? "");
   const [duration, setDuration] = useState(Number(params.get("duracion") ?? 15));
   const [locale, setLocale] = useState(params.get("idioma") ?? "es");
-  const [musicId, setMusicId] = useState(params.get("musica") ?? music[0]?.id ?? "");
+  const [breathingId, setBreathingId] = useState(
+    params.get("respiracion") ?? exercises[0]?.id ?? "",
+  );
   const [publish, setPublish] = useState(
     params.get("visibilidad") ? params.get("visibilidad") === "public" : publishByDefault,
   );
 
   const minutes = copy(lang).common.minutes;
   const voice = voices.find((v) => v.id === selectedVoiceId) ?? voices[0];
-  const sections = useMemo(() => planSession(duration), [duration]);
-  const totals = useMemo(() => planTotals(sections), [sections]);
+
+  /*
+   * Solo se ofrece lo que existe grabado para esta voz, este idioma y este hueco:
+   * el audio de la respiración se pregenera a mano, así que ofrecer un ejercicio
+   * sin grabar sería prometer algo que después no suena.
+   */
+  const slot = breathingSlotSeconds(duration);
+  const available = useMemo(
+    () =>
+      exercises.flatMap((exercise) => {
+        const option = breathingOptions.find(
+          (o) => o.exercise_id === exercise.id && o.locale === locale && o.slot_seconds === slot,
+        );
+        return option ? [{ exercise, seconds: option.seconds }] : [];
+      }),
+    [exercises, breathingOptions, locale, slot],
+  );
+
+  const breathing = available.find((b) => b.exercise.id === breathingId) ?? null;
+  const breathingLabel = breathing
+    ? localized(breathing.exercise, lang, "name")
+    : null;
+
+  const sections = useMemo(
+    () =>
+      planOutline(
+        duration,
+        breathing ? { label: breathingLabel!, seconds: breathing.seconds } : null,
+      ),
+    [duration, breathing, breathingLabel],
+  );
+  const totals = useMemo(
+    () => planTotals(planSession(duration, breathing?.seconds ?? 0)),
+    [duration, breathing],
+  );
 
   /** Vuelve al banco de voces sin perder lo escrito. */
   const voicesHref = (() => {
@@ -68,7 +109,7 @@ export function Customizer({
       intencion: intention,
       duracion: String(duration),
       idioma: locale,
-      musica: musicId,
+      respiracion: breathingId,
       visibilidad: publish ? "public" : "private",
     });
     if (intentionSlug) draft.set("i", intentionSlug);
@@ -98,7 +139,7 @@ export function Customizer({
           durationMinutes: duration,
           locale,
           voiceId: voice?.id,
-          musicTrackId: musicId || null,
+          breathingExerciseId: breathing?.exercise.id ?? null,
           visibility: publish ? "public" : "private",
         }),
       });
@@ -169,15 +210,29 @@ export function Customizer({
           </div>
         </Section>
 
-        <Section label={t.sectionMusic}>
-          <Pills
-            options={[
-              ...music.map((m) => ({ id: m.id, label: m.name })),
-              { id: "", label: t.noMusic },
-            ]}
-            value={musicId}
-            onChange={setMusicId}
-          />
+        <Section label={t.sectionBreathing}>
+          {available.length === 0 ? (
+            <p className="text-[15px] leading-[1.55] text-muted-soft">{t.noBreathingAvailable}</p>
+          ) : (
+            <>
+              <Pills
+                options={[
+                  ...available.map((b) => ({
+                    id: b.exercise.id,
+                    label: `${localized(b.exercise, lang, "name")} · ${formatClock(b.seconds)}`,
+                  })),
+                  { id: "", label: t.noBreathing },
+                ]}
+                value={breathing?.exercise.id ?? ""}
+                onChange={setBreathingId}
+              />
+              <p className="mt-[10px] text-[13px] leading-[1.5] text-faint">
+                {breathing
+                  ? localized(breathing.exercise, lang, "summary")
+                  : t.noBreathingNote}
+              </p>
+            </>
+          )}
         </Section>
 
         <Section label={t.sectionWhenDone} last>
@@ -201,28 +256,31 @@ export function Customizer({
 
         <div className="mb-[26px] flex flex-col gap-[14px]">
           {sections.map((s) => (
-            <div key={s.position} className="flex items-center gap-[14px]">
+            <div key={s.key} className="flex items-center gap-[14px]">
               <span
                 className="h-2 w-2 flex-none rounded-full"
-                style={{
-                  background:
-                    s.kind === "dynamic" ? "var(--color-clay)" : "var(--color-clay-bar)",
-                }}
+                style={{ background: dotColor(s.kind) }}
               />
               <div className="mr-auto min-w-0">
                 <div className="text-[16px]">{sectionLabel(lang, s.label)}</div>
                 <div className="text-[13px] text-faint">
-                  {s.kind === "dynamic" ? t.generatedForYou : t.pregenerated}
+                  {s.kind === "dynamic"
+                    ? t.generatedForYou
+                    : s.kind === "breathing"
+                      ? t.breathingPregenerated
+                      : t.pregenerated}
                 </div>
               </div>
-              <span className="flex-none text-[14px] text-muted">{s.minutes} {minutes}</span>
+              <span className="flex-none text-[14px] tabular-nums text-muted">
+                {formatClock(s.seconds)}
+              </span>
             </div>
           ))}
         </div>
 
         <div className="mb-[22px] h-px bg-line-hair" />
 
-        <Line label={t.linePersonalized} value={`${totals.dynamicMinutes} ${minutes}`} />
+        <Line label={t.linePersonalized} value={formatClock(totals.dynamicSeconds)} />
         <Line label={t.lineVoice} value={voice?.name ?? "—"} />
         <Line label={t.lineCost} value={costLabel} last />
 
@@ -251,6 +309,12 @@ export function Customizer({
       </aside>
     </div>
   );
+}
+
+function dotColor(kind: "fixed" | "dynamic" | "breathing"): string {
+  if (kind === "dynamic") return "var(--color-clay)";
+  if (kind === "breathing") return "var(--color-clay-tint)";
+  return "var(--color-clay-bar)";
 }
 
 function Section({

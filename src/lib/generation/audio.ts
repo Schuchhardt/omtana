@@ -28,6 +28,16 @@ export async function run(bin: string, args: string[]): Promise<string> {
   return (await exec(bin, args)).stdout;
 }
 
+/**
+ * Igual que `run` pero devuelve también stderr, que es donde ffmpeg escribe sus
+ * análisis (`silencedetect` y compañía). Lo usa la verificación de respiración.
+ */
+export async function runCapture(bin: string, args: string[]) {
+  return exec(bin, args);
+}
+
+export { FFMPEG as FFMPEG_BIN, FFPROBE as FFPROBE_BIN };
+
 export class FfmpegMissingError extends Error {}
 
 let ffmpegChecked: boolean | null = null;

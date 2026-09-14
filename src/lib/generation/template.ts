@@ -1,12 +1,24 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "../supabase";
 import { uploadAudio } from "../storage";
-import { planSession, wordTarget, type PlannedSection } from "../session-plan";
+import { planSession, sectionMinutes, wordTarget, type PlannedSection } from "../session-plan";
 import { synthesize } from "./tts";
 import { localized } from "../i18n";
 import type { Intention, Voice } from "../types";
 
 const MODEL = "claude-opus-5";
+
+/**
+ * Versión del reparto de secciones.
+ *
+ * La 1 abría con un bloque de respiración escrito; la 2 lo sacó a una pista
+ * aparte, así que todas las posiciones se corrieron en uno; la 3 le dio a esa
+ * pista dos minutos en vez de uno, y en las sesiones de cinco eso dejó fuera el
+ * bloque de refuerzo. Una plantilla vieja reutilizada en una sesión nueva
+ * pondría el audio equivocado en cada tramo, y por eso la versión es parte de
+ * su identidad.
+ */
+export const PLAN_VERSION = 3;
 
 const LANGUAGE: Record<string, string> = {
   es: "español neutro",
@@ -25,7 +37,11 @@ Cómo suenan:
 - Sin solemnidad ni vocabulario New Age. Nada de "energías", "universo", "sanación".
 - Nunca prometes resultados ni das consejo médico, nutricional ni psicológico.
 - Las pausas se marcan con "..." al final de una frase. Úsalas seguido.
-- El bloque de respiración guía el patrón con conteo explícito y lo repite varias veces.`;
+
+La sesión abre con un ejercicio de respiración guiado que no escribes tú: va en
+una pista aparte, con su propio reloj. Tu primer bloque entra justo después, con
+la persona ya respirando lento. No repitas instrucciones de respiración contada
+ni anuncies lo que acaba de pasar.`;
 
 const schema = {
   type: "object" as const,
@@ -51,7 +67,6 @@ async function writeFixedSections(
   intention: Intention,
   locale: string,
   sections: PlannedSection[],
-  breathingPattern: string,
 ): Promise<Record<number, string>> {
   const client = new Anthropic();
   const fixed = sections.filter((s) => s.kind === "fixed");
@@ -59,7 +74,7 @@ async function writeFixedSections(
   const brief = fixed
     .map(
       (s) =>
-        `- Sección ${s.position} ("${s.label}"): ${s.minutes} minuto(s), alrededor de ${wordTarget(s)} palabras. ${s.brief}`,
+        `- Sección ${s.position} ("${s.label}"): ${sectionMinutes(s)} minuto(s), alrededor de ${wordTarget(s)} palabras. ${s.brief}`,
     )
     .join("\n");
 
@@ -73,7 +88,6 @@ async function writeFixedSections(
       {
         role: "user",
         content: `Idioma: ${LANGUAGE[locale] ?? LANGUAGE.es}.
-Patrón de respiración de la apertura: ${breathingPattern}.
 
 Intención de esta plantilla: "${localized(intention, locale, "title")}".
 ${localized(intention, locale, "brief") || localized(intention, locale, "summary")}
@@ -138,6 +152,7 @@ export async function ensureTemplate(
     .eq("locale", locale)
     .eq("duration_minutes", durationMinutes)
     .eq("voice_id", voice.id)
+    .eq("plan_version", PLAN_VERSION)
     .eq("active", true)
     .maybeSingle();
 
@@ -156,11 +171,13 @@ export async function ensureTemplate(
     await db().from("omtana_templates").delete().eq("id", existing.id);
   }
 
+  // La plantilla se escribe sobre el reparto sin respiración: los bloques fijos
+  // no dependen del ejercicio que se elija, y por eso una sola plantilla sirve
+  // para todos ellos.
   const plan = planSession(durationMinutes);
-  const breathingPattern = "4-7-8";
 
   opts.onStep?.("plantilla:guion");
-  const texts = await writeFixedSections(intention, locale, plan, breathingPattern);
+  const texts = await writeFixedSections(intention, locale, plan);
 
   const { data: template, error } = await db()
     .from("omtana_templates")
@@ -169,7 +186,7 @@ export async function ensureTemplate(
       locale,
       duration_minutes: durationMinutes,
       voice_id: voice.id,
-      breathing_pattern: breathingPattern,
+      plan_version: PLAN_VERSION,
     })
     .select("id")
     .single();
@@ -199,7 +216,7 @@ export async function ensureTemplate(
       position: section.position,
       kind: section.kind,
       label: section.label,
-      seconds: section.minutes * 60,
+      seconds: section.seconds,
       script_text: scriptText,
       audio_path: audioPath,
       brief: section.brief,

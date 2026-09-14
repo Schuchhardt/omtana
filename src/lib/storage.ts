@@ -54,3 +54,18 @@ export async function signedUrl(path: string | null): Promise<string | null> {
     .createSignedUrl(path, SIGNED_TTL_SECONDS);
   return data?.signedUrl ?? null;
 }
+
+/**
+ * Varias URLs firmadas en una sola llamada. El reproductor necesita la pista
+ * de cada tema de fondo, y firmarlas de a una eran treinta viajes al servidor.
+ * Devuelve un arreglo alineado con `paths`: `null` donde no se pudo firmar.
+ */
+export async function signedUrls(paths: string[]): Promise<(string | null)[]> {
+  if (paths.length === 0) return [];
+  const { data } = await db()
+    .storage.from(AUDIO_BUCKET)
+    .createSignedUrls(paths, SIGNED_TTL_SECONDS);
+
+  const byPath = new Map((data ?? []).map((row) => [row.path, row.signedUrl]));
+  return paths.map((path) => byPath.get(path) ?? null);
+}

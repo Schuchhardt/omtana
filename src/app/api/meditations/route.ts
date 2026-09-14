@@ -5,6 +5,7 @@ import { currentUser } from "@/lib/auth";
 import { remainingFree } from "@/lib/queries";
 import { runGenerationJob } from "@/lib/generation/pipeline";
 import { CREDIT_COST_PER_MEDITATION, PLAN } from "@/lib/config";
+import { breathingSlotSeconds } from "@/lib/breathing";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
@@ -17,7 +18,7 @@ const schema = z.object({
   durationMinutes: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(20)]),
   locale: z.enum(["es", "en", "pt"]),
   voiceId: z.string().uuid(),
-  musicTrackId: z.string().uuid().nullable().optional(),
+  breathingExerciseId: z.string().uuid().nullable().optional(),
   visibility: z.enum(["private", "public"]),
 });
 
@@ -65,7 +66,11 @@ export async function POST(request: Request) {
       user_id: user.id,
       intention_id: intentionId,
       voice_id: input.voiceId,
-      music_track_id: input.musicTrackId ?? null,
+      // La música ya no se mezcla dentro del audio: el reproductor la pone en
+      // vivo, con su propio volumen, sobre la sesión ya generada.
+      music_track_id: null,
+      breathing_exercise_id: input.breathingExerciseId ?? null,
+      breathing_slot_seconds: breathingSlotSeconds(input.durationMinutes),
       title: input.intention.slice(0, 90),
       intention_text: input.intention,
       context_text: input.context,
