@@ -1,0 +1,76 @@
+# Genera las meditaciones que le faltan al banco.
+#
+# No genera "las siguientes" sino las que más desequilibran: la curaduría mira
+# qué áreas de la vida, qué necesidades y qué duraciones están flojas y la
+# tanda ataca eso primero. Correrla dos veces por semana empareja el catálogo
+# solo, sin que nadie tenga que llevar la cuenta.
+#
+# Localmente es exactamente lo mismo:
+#   npm run ci -- meditaciones --cuantas 3
+#   npm run ci -- meditaciones --seco     (dice qué haría, sin gastar)
+name: Meditaciones
+
+on:
+  schedule:
+    # Martes y viernes a las 11:00 UTC.
+    - cron: "0 11 * * 2,5"
+  workflow_dispatch:
+    inputs:
+      cuantas:
+        description: "Cuántas sesiones generar"
+        default: "3"
+      voz:
+        description: "Slug de la voz (vacío = la primera del banco)"
+        default: ""
+      idioma:
+        description: "es, en o pt"
+        default: "es"
+      investigar:
+        description: "Además, proponer contenido nuevo con el modelo"
+        type: boolean
+        default: false
+      seco:
+        description: "Solo decir qué haría"
+        type: boolean
+        default: false
+
+# Dos tandas a la vez se pisarían generando la misma sesión dos veces.
+concurrency:
+  group: meditaciones
+  cancel-in-progress: false
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    # La síntesis de voz de tres sesiones toma su tiempo; el techo está para
+    # que un cuelgue de la API no deje el job corriendo una hora.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # La mezcla de audio la hace ffmpeg. El runner suele traerlo.
+      - name: ffmpeg
+        run: ffmpeg -version > /dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      - name: Generar lo que falta
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+        run: |
+          npm run ci -- meditaciones \
+            --cuantas "${{ inputs.cuantas || '3' }}" \
+            --idioma "${{ inputs.idioma || 'es' }}" \
+            ${{ inputs.voz && format('--voz {0}', inputs.voz) || '' }} \
+            ${{ inputs.investigar == true && '--investigar' || '' }} \
+            ${{ inputs.seco == true && '--seco' || '' }}

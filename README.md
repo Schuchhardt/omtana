@@ -59,7 +59,10 @@ Necesitas `ffmpeg` y `ffprobe` en el PATH (`brew install ffmpeg`).
 | `npm run samples` | Graba la muestra de 12 s de cada voz. `-- --all` las rehace todas. |
 | `npm run respiracion` | Graba y verifica los ejercicios de respiración de una voz. Ver abajo. |
 | `npm run generate` | Genera meditaciones. Ver abajo. |
-| `npm run video` | Exporta el video 1920×1080 para YouTube. |
+| `npm run curaduria` | Qué le falta al banco para estar parejo. Ver abajo. |
+| `npm run video` | Renderiza las piezas de video: 16:9, 9:16 y 1:1. Ver abajo. |
+| `npm run youtube` | Sube al canal lo que ya está renderizado. Privado salvo que se diga otra cosa. |
+| `npm run ci` | Las tandas automáticas (`meditaciones`, `videos`) como una sola orden. Es lo que corre GitHub Actions. |
 | `npm run icons` | Rehace los PNG del manifiesto desde el símbolo de la marca. Solo cuando cambia el símbolo. |
 
 ### Generar meditaciones
@@ -74,6 +77,9 @@ npm run generate -- \
   --contexto "Dieta sin gluten hace tres meses, me cuesta el fin de semana" \
   --duracion 15 --voz aurora --respiracion caja-4-4-4-4
 
+# Las que más falta le hacen al banco, en orden de desequilibrio
+npm run generate -- --faltantes 3
+
 # El banco inicial completo, público en el catálogo
 npm run generate -- --curated
 
@@ -83,7 +89,13 @@ npm run generate -- --retry
 
 Opciones: `--intencion`, `--i <slug>`, `--contexto`, `--duracion 5|10|15|20`,
 `--voz <slug>`, `--respiracion <slug>|ninguna`, `--sin-respiracion`,
-`--idioma es|en|pt`, `--privada`, `--musica <slug>`.
+`--idioma es|en|pt`, `--privada`, `--musica <slug>`, `--faltantes <n>`.
+
+`--faltantes` es `--curated` al revés. `--curated` recorre el banco de arriba
+abajo, así que termina llenando primero el área que ya estaba llena — es la que
+viene primero en la lista. `--faltantes` le pregunta a la curaduría qué falta y
+empieza por el área con menos cobertura, así que tres por corrida emparejan el
+catálogo sin que nadie lleve la cuenta.
 
 La música ya no se mezcla dentro del archivo: el reproductor la pone en vivo,
 con su propio volumen, así que cada persona la sube, la baja o la cambia sin
@@ -184,16 +196,187 @@ personalizado, así que la meditación dura lo que la persona pidió. En el
 reproductor se puede cambiar de ejercicio, saltarlo o apagarlo sin regenerar
 nada: es una pista aparte, no un tramo del archivo.
 
-### Exportar video
+### Curaduría del banco
+
+El catálogo tiene que estar parejo en tres ejes: **área de la vida** (trabajo,
+dinero, salud, relaciones, comunidad, práctica), **necesidad** (dormir,
+ansiedad, foco, cuerpo, emoción, vínculo, sentido) y **forma** (duración,
+idioma, ejercicio de respiración). Un banco con quince sesiones de trabajo y
+ninguna de dinero está tan incompleto como uno con quince en cinco minutos y
+ninguna en veinte.
 
 ```bash
-npm run video -- <id-de-meditación>
-npm run video -- --catalogo          # todas las públicas que no tengan video
+npm run curaduria                        # el informe, sin gastar nada
+npm run curaduria -- --investigar        # propone lo que falta, con evidencia
+npm run curaduria -- --propuestas        # lo propuesto y sin aplicar
+npm run curaduria -- --aplicar <slug>    # lo mete al banco
+npm run curaduria -- --rechazar <slug>
+npm run curaduria -- --markdown          # el informe tal cual, para pegarlo
 ```
 
-Fondo oscuro, onda de audio reactiva, palabras clave sincronizadas y el wordmark.
-Queda en `out/video/` y también en el bucket. La primera corrida baja la
-tipografía Jost y rasteriza el logo.
+El informe **se calcula leyendo la base**: no llama a ningún modelo y no cuesta
+nada. La mitad de las decisiones de curaduría no necesitan que nadie opine — si
+una intención declara que existe en diez y en veinte minutos y solo está
+generada la de diez, eso es un hueco y punto. De ahí sale la lista ordenada que
+consume `npm run generate -- --faltantes`.
+
+`--investigar` sí gasta: le da el informe a Claude **con búsqueda web** y le
+pide lo que el informe no puede deducir. Para las intenciones, situaciones
+concretas del área que está floja. Para la respiración, protocolos con respaldo
+publicado: cuántos segundos dura cada fase, en qué población se midió y qué se
+observó, con la URL de cada fuente. Un ejercicio entra al banco con esa
+referencia guardada o no entra.
+
+La respiración no se mide por nombres sino por **la forma de la curva**, que es
+lo que define el efecto: lo que baja la activación es que la exhalación sea más
+larga que la inhalación, no que el ejercicio se llame 4-7-8. El informe reporta
+cinco familias —exhalación larga, con retención, resonante (5–6 respiraciones
+por minuto), doble inhalación y simétrica— y dice cuáles no cubre nadie. Un
+banco con cuatro ejercicios que son la misma forma está tan desequilibrado como
+uno con dos.
+
+**Nada se aplica solo.** Una intención nueva cambia la portada y un ejercicio
+nuevo lo va a hacer gente con el cuerpo, así que entre el modelo y el banco hay
+una persona: las propuestas quedan en `omtana_content_proposals` con su
+evidencia y esperan un `--aplicar`. Aplicar un ejercicio tampoco lo hace sonar:
+hay que grabarlo con `npm run respiracion`, y el aviso lo recuerda.
+
+### Renderizar video
+
+```bash
+npm run video -- <id-de-meditación>              # los tres formatos
+npm run video -- <id> --formato vertical         # solo el de redes
+npm run video -- <id> --pieza meditacion         # el recorte sale de la meditación
+npm run video -- <id> --sin-cartas               # el largo, sin presentación ni cierre
+npm run video -- <id> --muestra 25               # borrador rápido, no sube nada
+npm run video -- --semanal 3                     # la tanda de la semana
+npm run video -- --catalogo                      # todo lo público sin video
+```
+
+Tres formatos desde el mismo audio:
+
+| Formato | Tamaño | Qué lleva | Para |
+|---|---|---|---|
+| `youtube` | 1920×1080 | presentación, la sesión entera y cierre de marca | el canal |
+| `vertical` | 1080×1920 | una sola cosa, 20–45 s | Shorts, Reels, TikTok |
+| `cuadrado` | 1080×1080 | una sola cosa, 20–45 s | el feed |
+
+**Una pieza de redes lleva una sola cosa**: o el ejercicio de respiración o un
+pasaje de la meditación. Las dos juntas en un minuto no alcanzan a ser ninguna
+de las dos — la respiración queda a medio ciclo y la meditación entra por la
+mitad de una frase. Para eso está el 16:9.
+
+Y se corta donde el material tiene junta, no en el segundo redondo. La
+respiración empieza en el primer "inhala" —la entrada explica el patrón y en
+una pieza de veinte segundos es puro preámbulo— y termina justo donde empezaría
+el ciclo siguiente, así que se puede repetir en bucle sin que se note. El
+pasaje de meditación se elige entre las frases ya sincronizadas: empieza y
+acaba en frase, y entre dos del mismo largo gana el que tiene más texto —
+treinta segundos de silencio son perfectos dentro de una sesión y son un video
+vacío en un teléfono.
+
+Sin decir nada se recorta la respiración cuando la sesión la tiene;
+`--pieza meditacion` fuerza lo otro.
+
+**El largo abre y cierra con una carta.** Quien llega a un video de quince
+minutos decide en los primeros diez segundos si se queda, y lo que necesita
+saber es qué va a pasar: de qué es la sesión, cuánto dura y si abre con
+respiración guiada o entra directo al cuerpo. Eso es la presentación. El cierre
+es la única parte donde Omtana habla de sí misma: el wordmark grande,
+`omtana.com` y la invitación a generar la suya. Las dos van sobre el mismo
+fondo —el degradado sigue moviéndose y la música sigue sonando, así que el
+video no arranca en seco ni termina en corte— y suman veintiún segundos al
+archivo. `--sin-cartas` las apaga. Las piezas de redes no las llevan: en
+veintitrés segundos, once de presentación serían casi todo el video.
+
+**La escena es la del reproductor.** Fondo cálido que se mueve despacio, el
+disco respirando con el ejercicio — la misma curva, literalmente: `discLevel`
+vive en `src/lib/breathing.ts` y la usan la pantalla y el render, así que no
+pueden separarse—, la onda de barras siguiendo la voz, el guion abajo como
+subtítulo y el wordmark arriba. `--tema claro` usa la paleta de la app; el
+default es la oscura, que es la que `globals.css` rotula "frames de video".
+
+**Los subtítulos se miden, no se reparten.** El guion está guardado por tramos:
+sabemos qué dice cada uno y en qué segundo empieza, pero no en qué segundo cae
+cada frase. Repartir el texto de forma pareja sobre el tramo desincroniza a los
+dos minutos, porque una meditación es mitad silencio. Así que `silencedetect`
+dice dónde hay voz y las frases se reparten sobre el **tiempo hablado**: una
+frase que cae antes de una pausa larga se queda en pantalla durante la pausa,
+que es justo lo que uno quiere leer mientras respira. No cuesta modelo y
+funciona sobre las meditaciones que ya existen.
+
+La respiración va adentro del video de YouTube, con su audio y sus
+instrucciones subtituladas, y es de donde salen los recortes de redes: es la
+parte que se explica sola. La música sí se hornea acá — un video no tiene mezclador —, a
+un volumen más bajo que el que trae el reproductor, porque una música que tapa
+la voz no se arregla sin volver a renderizar.
+
+Queda en `out/video/` el `.mp4`, el `.srt` y un `.json` con el título, la
+descripción, los capítulos y las etiquetas con las que se sube. En el bucket
+queda una copia, salvo que el archivo pase el techo de subida del proyecto — ahí
+sirve el local, que es el que se sube igual.
+
+Opciones: `--formato youtube,vertical,cuadrado|todos`, `--pieza
+respiracion|meditacion|auto`, `--tema oscuro|claro`, `--musica <slug>|ninguna`,
+`--sin-respiracion`, `--sin-cartas`, `--muestra <segundos>`, `--salida <dir>`,
+`--sin-subir`, `--semanal <n>`, `--catalogo`.
+
+### Subir a YouTube
+
+```bash
+npm run youtube -- --seco                 # dice qué subiría
+npm run youtube -- --cuantos 3
+npm run youtube -- --formato vertical --visibilidad unlisted
+```
+
+Sube **privado** salvo que se le diga otra cosa: el canal es la cara pública del
+proyecto y una pieza generada de punta a punta merece que alguien la mire antes
+que nadie más. Necesita `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` y
+`YOUTUBE_REFRESH_TOKEN` — una app OAuth de Google Cloud con la YouTube Data API
+v3 habilitada y un refresh token sacado una vez, con scope `youtube.upload`,
+desde la cuenta dueña del canal. Sin esos secretos los videos se generan igual y
+se suben a mano desde `out/video/`.
+
+## Automatización
+
+Tres workflows en `.github/workflows/`, y los tres llaman a lo mismo que se
+puede correr a mano. Esa es la regla: **Actions no ejecuta nada que no ejecutes
+tú**, así que si allá falla y acá no, la diferencia está en los secretos o en el
+runner, no en lo que corre.
+
+| Workflow | Cuándo | Qué hace | En local |
+|---|---|---|---|
+| `meditaciones.yml` | martes y viernes | genera las sesiones que más falta hacen | `npm run ci -- meditaciones --cuantas 3` |
+| `videos.yml` | lunes | renderiza los tres formatos de la tanda semanal | `npm run ci -- videos --cuantos 3` |
+| `curaduria.yml` | domingos | investiga qué falta y abre un issue con las propuestas | `npm run curaduria -- --investigar` |
+
+```bash
+npm run ci -- meditaciones --seco    # imprime los comandos, no ejecuta ninguno
+npm run ci -- videos --seco
+npm run ci -- videos --cuantos 1     # la tanda de verdad, más corta
+```
+
+`--seco` imprime cada paso con el comando exacto que correría, así que copiar el
+que falló y repetirlo a mano es un copiar y pegar. Con
+[`act`](https://github.com/nektos/act) se puede correr el workflow entero:
+
+```bash
+act workflow_dispatch -W .github/workflows/videos.yml \
+  --secret-file .env.local --input cuantos=1 --input seco=true
+```
+
+Los tres tienen `workflow_dispatch`, así que se pueden disparar a mano desde la
+pestaña Actions con sus parámetros. Ninguno publica nada por su cuenta: subir a
+YouTube es una casilla que hay que marcar, y sube en privado.
+
+**Secretos que hay que cargar en el repo** (Settings → Secrets → Actions):
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`,
+`ELEVENLABS_API_KEY` y, solo si se va a publicar, `YOUTUBE_CLIENT_ID`,
+`YOUTUBE_CLIENT_SECRET` y `YOUTUBE_REFRESH_TOKEN`. Como variable (no secreto),
+`NEXT_PUBLIC_SITE_URL`, que es el enlace que va en la descripción de cada video.
+
+Las tandas llevan `concurrency` por nombre: dos corridas a la vez generarían la
+misma sesión dos veces, porque las dos verían el mismo hueco.
 
 ## Estructura
 
@@ -216,11 +399,22 @@ src/
       tts.ts              ElevenLabs
       audio.ts            mezcla con ffmpeg
       pipeline.ts         orquesta y persiste
+    video/
+      brand.ts            paleta, formatos y encuadre de cada pieza
+      disc.ts             los cuadros del disco que respira, y la rejilla de la onda
+      subtitles.ts        sincroniza el guion con el audio medido
+      render.ts           arma el filtro de ffmpeg
+      copy.ts             título, descripción y capítulos de cada video
+    curation/
+      balance.ts          qué le falta al banco, leyendo la base
+      research.ts         qué proponer, con Claude y búsqueda web
+      report.ts           el informe en Markdown
     manifest.ts           manifiesto de la PWA
     sw.js/                service worker, versionado por build
     offline/              lo que se ve sin red
   lib/version.ts          versión y hash del build
-scripts/                  CLI: setup, seed, generación, video
+scripts/                  CLI: setup, seed, generación, video, curaduría
+.github/workflows/        las tandas automáticas
 supabase/migrations/      esquema
 design/                   el archivo original de Claude Design, como referencia
 ```

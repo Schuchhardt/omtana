@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { BreathingStep, StepKind } from "@/lib/breathing";
+import { levelOf, stepAt, type BreathingStep, type StepKind } from "@/lib/breathing";
 import type { Copy } from "@/lib/i18n";
 
 const SIZE = 240;
@@ -60,7 +60,7 @@ export function BreathingGuide({
       if (!step) return;
 
       const progress = step.seconds > 0 ? (time - step.at) / step.seconds : 1;
-      paint(level(step, Math.max(0, Math.min(1, progress))));
+      paint(levelOf(step, Math.max(0, Math.min(1, progress))));
 
       // El número baja por segundos enteros, así que solo se re-renderiza doce
       // veces por ciclo y no sesenta por segundo.
@@ -108,22 +108,6 @@ export function BreathingGuide({
       </div>
     </div>
   );
-}
-
-/** En qué fase cae un instante. Los pasos vienen ordenados y sin huecos. */
-function stepAt(steps: BreathingStep[], time: number): BreathingStep | null {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    if (time >= steps[i].at) return steps[i];
-  }
-  return steps[0] ?? null;
-}
-
-function level(step: BreathingStep, progress: number): number {
-  if (step.from === step.to) return step.to;
-  // Coseno y no lineal: el aire entra y sale sin tirones en los extremos, que es
-  // como respira un cuerpo y no como se mueve una barra de progreso.
-  const eased = 0.5 - 0.5 * Math.cos(Math.PI * progress);
-  return step.from + (step.to - step.from) * eased;
 }
 
 function counted(step: BreathingStep): boolean {

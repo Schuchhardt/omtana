@@ -1,7 +1,7 @@
 const API = "https://api.elevenlabs.io/v1";
 
 /** Modelo multilingüe: la misma voz sirve para ES, EN y PT. */
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2";
+const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
 
 export interface SynthesisOptions {
   voiceId: string;

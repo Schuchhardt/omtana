@@ -371,6 +371,38 @@ function defaultLevel(kind: PhaseKind, current: number): number {
   return current; // hold y empty se quedan donde están
 }
 
+/* ───────────────────────── animación del disco ───────────────────────── */
+
+/** En qué fase cae un instante. Los pasos vienen ordenados y sin huecos. */
+export function stepAt(steps: BreathingStep[], time: number): BreathingStep | null {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (time >= steps[i].at) return steps[i];
+  }
+  return steps[0] ?? null;
+}
+
+export function levelOf(step: BreathingStep, progress: number): number {
+  if (step.from === step.to) return step.to;
+  // Coseno y no lineal: el aire entra y sale sin tirones en los extremos, que es
+  // como respira un cuerpo y no como se mueve una barra de progreso.
+  const eased = 0.5 - 0.5 * Math.cos(Math.PI * progress);
+  return step.from + (step.to - step.from) * eased;
+}
+
+/**
+ * Qué tan llenos están los pulmones en un instante, entre 0 y 1.
+ *
+ * Lo usan el reproductor y el exportador de video: el disco del video tiene
+ * que respirar igual que el de la pantalla, y con dos copias de esta curva
+ * dejarían de hacerlo en cuanto se tocara una.
+ */
+export function discLevel(steps: BreathingStep[], time: number): number {
+  const step = stepAt(steps, time);
+  if (!step) return 0;
+  const progress = step.seconds > 0 ? (time - step.at) / step.seconds : 1;
+  return levelOf(step, Math.max(0, Math.min(1, progress)));
+}
+
 /** Dónde vive cada señal en el bucket, para no re-sintetizar lo ya dicho. */
 export function cuePath(voiceSlug: string, locale: string, slug: string): string {
   return `breathing/cues/${voiceSlug}/${locale}/${slug}.mp3`;

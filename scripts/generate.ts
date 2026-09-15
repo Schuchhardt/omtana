@@ -5,6 +5,7 @@
  *   npm run generate -- --i dormir-sin-dar-vueltas --contexto "Me despierto a las 4"
  *   npm run generate -- --respiracion caja-4-4-4-4   abre con ese ejercicio
  *   npm run generate -- --sin-respiracion            entra directo al cuerpo
+ *   npm run generate -- --faltantes 3             lo que más falta le hace al banco
  *   npm run generate -- --curated                 pregenera todo el banco, público
  *   npm run generate -- --curated --duracion 10   solo esa duración
  *   npm run generate -- --retry                   reintenta las que fallaron
@@ -18,6 +19,7 @@ import { db } from "../src/lib/supabase";
 import { ensureBucket } from "../src/lib/storage";
 import { generateMeditation } from "../src/lib/generation/pipeline";
 import { breathingSlotSeconds, type BreathingExercise } from "../src/lib/breathing";
+import { balance, generationJobs } from "../src/lib/curation/balance";
 import { DURATIONS } from "../src/lib/config";
 import type { Intention, Meditation, MusicTrack, Voice } from "../src/lib/types";
 
@@ -56,6 +58,9 @@ async function main() {
   }
 
   if (args.flags.has("retry")) return retry();
+  if (args.values.has("faltantes") || args.flags.has("faltantes")) {
+    return missing(args, linked, music, intentions, exercises);
+  }
   if (args.flags.has("curated")) return curated(args, linked, music, intentions, exercises);
   return single(args, linked, music, intentions, exercises);
 }
@@ -207,6 +212,84 @@ async function curated(
   }
 
   log.done(`${ok} generadas${failed ? `, ${failed} con error` : ""}.`);
+}
+
+/* ─────────────────── lo que le falta al banco ─────────────────── */
+
+/**
+ * Genera lo que el informe de curaduría marca como hueco, en su orden.
+ *
+ * Es `--curated` al revés: en vez de recorrer el banco entero de arriba abajo
+ * — que termina llenando primero el área que ya estaba llena, porque es la que
+ * viene primero en la lista — toma las sesiones que faltan empezando por el
+ * área con menos cobertura. Con tres por corrida, el banco se empareja solo.
+ */
+async function missing(
+  args: ReturnType<typeof parseArgs>,
+  voices: Voice[],
+  music: MusicTrack[],
+  intentions: Intention[],
+  exercises: BreathingExercise[],
+) {
+  const wanted = Number(args.values.get("faltantes") ?? 3);
+  if (!Number.isFinite(wanted) || wanted < 1) {
+    fatal("--faltantes espera cuántas generar: --faltantes 3");
+  }
+
+  const voice = pickVoice(voices, args.values.get("voz"));
+  const track = pickMusic(music, args.values.get("musica"));
+
+  log.title("Viendo qué le falta al banco");
+  const report = await balance();
+  const jobs = generationJobs(report, wanted);
+
+  if (jobs.length === 0) {
+    log.done("El banco está parejo: no falta ninguna sesión por generar.");
+    return;
+  }
+
+  log.info(
+    `${report.gaps.length} huecos en total · se generan ${jobs.length} · voz ${voice.name}`,
+  );
+
+  let ok = 0;
+  let failed = 0;
+
+  for (const [i, job] of jobs.entries()) {
+    const intention = intentions.find((it) => it.slug === job.intentionSlug);
+    if (!intention) {
+      log.warn(`${job.intentionSlug} — ya no está activa en el banco, se salta`);
+      continue;
+    }
+
+    const tag = `[${i + 1}/${jobs.length}] ${intention.category} · ${intention.title} · ${job.duration} min`;
+    log.step(tag);
+
+    try {
+      const breathing = await pickBreathing(args, exercises, voice, job.locale, job.duration);
+      const id = await createMeditation({
+        intentionId: intention.id,
+        title: intention.title,
+        intentionText: intention.title,
+        context: intention.brief || intention.summary,
+        locale: job.locale,
+        duration: job.duration,
+        voiceId: voice.id,
+        musicId: track?.id ?? null,
+        breathingId: breathing?.id ?? null,
+        visibility: "public",
+        source: "curated",
+      });
+      await runOne(id, tag);
+      ok++;
+    } catch (err) {
+      failed++;
+      log.fail(`${tag} — ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  log.done(`${ok} generadas${failed ? `, ${failed} con error` : ""}.`);
+  if (failed > 0) process.exitCode = 1;
 }
 
 /* ───────────────────────── reintentos ───────────────────────── */

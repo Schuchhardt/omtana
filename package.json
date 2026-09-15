@@ -14,7 +14,10 @@
     "samples": "tsx --conditions=react-server scripts/samples.ts",
     "generate": "tsx --conditions=react-server scripts/generate.ts",
     "respiracion": "tsx --conditions=react-server scripts/breathing.ts",
-    "video": "tsx --conditions=react-server scripts/export-video.ts",
+    "video": "tsx --conditions=react-server scripts/video.ts",
+    "curaduria": "tsx --conditions=react-server scripts/curaduria.ts",
+    "youtube": "tsx --conditions=react-server scripts/publish-youtube.ts",
+    "ci": "tsx --conditions=react-server scripts/ci.ts",
     "setup": "npm run db:push && npm run seed",
     "icons": "tsx --conditions=react-server scripts/icons.ts"
   },

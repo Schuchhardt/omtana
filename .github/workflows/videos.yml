@@ -1,0 +1,103 @@
+# Los videos de la semana.
+#
+# Toma las meditaciones públicas que todavía no tienen video, repartidas entre
+# áreas de la vida — publicar cinco de trabajo seguidas deja el canal escorado
+# igual que deja escorado al banco generar siempre lo mismo — y renderiza los
+# tres formatos: 16:9 para YouTube, 9:16 para shorts y reels, 1:1 para el feed.
+#
+# Los archivos quedan como artefacto del job y, si caben, también en el bucket.
+# Subirlos a YouTube es un paso aparte y opcional: se pide a mano, y sube en
+# privado para que alguien los mire antes.
+#
+# Localmente es exactamente lo mismo:
+#   npm run ci -- videos --cuantos 3
+#   npm run video -- <id> --muestra 25     (borrador de 25 s para ver el encuadre)
+name: Videos
+
+on:
+  schedule:
+    # Lunes a las 12:00 UTC.
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+    inputs:
+      cuantos:
+        description: "Cuántas meditaciones renderizar"
+        default: "3"
+      formato:
+        description: "youtube, vertical, cuadrado o todos"
+        type: choice
+        options: ["todos", "youtube", "vertical", "cuadrado"]
+        default: "todos"
+      publicar:
+        description: "Subir a YouTube al terminar"
+        type: boolean
+        default: false
+      visibilidad:
+        description: "Con qué visibilidad se suben"
+        type: choice
+        options: ["private", "unlisted", "public"]
+        default: "private"
+      seco:
+        description: "Solo decir qué haría"
+        type: boolean
+        default: false
+
+concurrency:
+  group: videos
+  cancel-in-progress: false
+
+jobs:
+  renderizar:
+    runs-on: ubuntu-latest
+    # Un 16:9 de quince minutos tarda varios minutos en codificar, y son tres
+    # formatos por meditación.
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: ffmpeg
+        run: ffmpeg -version > /dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      # La tipografía de la marca se baja una vez y se cachea: son dos archivos
+      # y sin ellos el video sale sin texto.
+      - name: Tipografía
+        uses: actions/cache@v4
+        with:
+          path: assets/fonts
+          key: jost-v1
+
+      - name: Renderizar
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          npm run ci -- videos \
+            --cuantos "${{ inputs.cuantos || '3' }}" \
+            --formato "${{ inputs.formato || 'todos' }}" \
+            --visibilidad "${{ inputs.visibilidad || 'private' }}" \
+            ${{ inputs.publicar == true && '--publicar' || '' }} \
+            ${{ inputs.seco == true && '--seco' || '' }}
+
+      - name: Guardar los archivos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: videos
+          path: |
+            out/video/*.mp4
+            out/video/*.srt
+            out/video/*.json
+          if-no-files-found: ignore
+          retention-days: 14

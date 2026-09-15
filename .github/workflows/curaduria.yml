@@ -1,0 +1,85 @@
+# La investigación semanal del banco.
+#
+# Mira el equilibrio del catálogo — áreas de la vida, necesidades, duraciones y
+# qué patrones de respiración están cubiertos — y le pide al modelo, con
+# búsqueda web, qué falta: intenciones nuevas para las áreas flojas y
+# ejercicios de respiración con evidencia publicada detrás.
+#
+# Lo que encuentra queda como propuesta en la base y como issue acá. No se
+# aplica solo: una intención nueva cambia la portada y un ejercicio nuevo lo va
+# a hacer gente con el cuerpo, así que entre el modelo y el banco hay una
+# persona. Para aceptar una:
+#
+#   npm run curaduria -- --propuestas
+#   npm run curaduria -- --aplicar <slug>
+#
+# Localmente:
+#   npm run curaduria                      el informe, gratis
+#   npm run curaduria -- --investigar      la investigación completa
+name: Curaduría
+
+on:
+  schedule:
+    # Domingos a las 10:00 UTC, para que la tanda del martes ya la use.
+    - cron: "0 10 * * 0"
+  workflow_dispatch:
+    inputs:
+      intenciones:
+        description: "Cuántas intenciones proponer como mucho"
+        default: "3"
+      ejercicios:
+        description: "Cuántos ejercicios de respiración proponer como mucho"
+        default: "1"
+      solo_informe:
+        description: "Solo el informe, sin llamar al modelo"
+        type: boolean
+        default: false
+
+concurrency:
+  group: curaduria
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  investigar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Informe e investigación
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npm run curaduria -- --markdown \
+            ${{ inputs.solo_informe == true && ' ' || '--investigar' }} \
+            --intenciones "${{ inputs.intenciones || '3' }}" \
+            --ejercicios "${{ inputs.ejercicios || '1' }}" \
+            > informe.md
+          cat informe.md
+
+      - name: Abrir el issue con lo propuesto
+        if: inputs.solo_informe != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Curaduría del banco · $(date -u +%Y-%m-%d)" \
+            --body-file informe.md \
+            --label curaduria || \
+          gh issue create \
+            --title "Curaduría del banco · $(date -u +%Y-%m-%d)" \
+            --body-file informe.md
