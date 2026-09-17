@@ -4,7 +4,9 @@ import nextTs from "eslint-config-next/typescript";
 
 const eslintConfig = defineConfig([
   // `design/` es el export original de Claude Design: referencia, no código del proyecto.
-  globalIgnores(["design/**", ".next/**", "out/**"]),
+  // `brag-output/` es el proyecto del video de presentación (HTML + GSAP para
+  // renderizar con hyperframes): no se compila con la app.
+  globalIgnores(["design/**", "brag-output/**", ".next/**", "out/**"]),
   ...nextVitals,
   ...nextTs,
   // Override default ignores of eslint-config-next.

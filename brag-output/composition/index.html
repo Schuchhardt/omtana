@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>Omtana — Brag</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* Jost — la misma tipografía que carga la app con next/font/google,
+         servida local porque un font-family con nombre necesita @font-face. */
+      @font-face {
+        font-family: "Jost";
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+        src: url("assets/fonts/jost-latin.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+          U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+          U+2212, U+2215, U+FEFF, U+FFFD;
+      }
+      @font-face {
+        font-family: "Jost";
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+        src: url("assets/fonts/jost-latin-ext.woff2") format("woff2");
+        unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+          U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+          U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+      }
+
+      /* Los tokens salen tal cual de src/app/globals.css @theme. */
+      :root {
+        --sand: #f6f1e9;
+        --sand-deep: #f1eadf;
+        --paper: #fffdf9;
+        --ink: #241f1a;
+        --ink-soft: #4a4239;
+        --muted: #6b6157;
+        --clay: #b4643c;
+        --clay-deep: #8e4a29;
+        --clay-tint: #c9a489;
+        --clay-glow: #ebd6c6;
+        --clay-mist: #f6e9dd;
+        --clay-bar: #d5c4b2;
+        --line: #e4daca;
+        --line-soft: #e7decf;
+        --line-field: #e0d5c3;
+        --line-hair: #ede4d6;
+        /* Bloque oscuro: el tema `oscuro` de src/lib/video/brand.ts. */
+        --night: #231c17;
+        --night-deep: #151110;
+        --night-glow: #463226;
+        --night-disc: #c4a98f;
+        --night-ring: #8e7561;
+        --night-text: #f6f1e9;
+        --night-soft: #c4b9aa;
+        --night-faint: #a79c8d;
+        --night-track: #38302a;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--sand);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--sand);
+        font-family: "Jost", sans-serif;
+        font-weight: 400;
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── capas de fondo (sin data-start: no son clips) ────────────────── */
+      .layer {
+        position: absolute;
+        inset: 0;
+      }
+      #bg-light {
+        background: radial-gradient(
+          120% 95% at 12% 8%,
+          var(--clay-mist) 0%,
+          var(--sand) 46%,
+          var(--sand-deep) 100%
+        );
+      }
+      #bg-dark {
+        opacity: 0;
+        background: var(--night-deep);
+      }
+      #bg-dark-glow {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          70% 70% at 69% 44%,
+          var(--night-glow) 0%,
+          var(--night) 52%,
+          var(--night-deep) 100%
+        );
+      }
+      /* Grano: feTurbulence tiene semilla fija, así que es determinista. */
+      #grain {
+        opacity: 0.075;
+        mix-blend-mode: multiply;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+      }
+
+      /* ── el disco que respira (BreathCircle), persistente en 1→3 ──────── */
+      #disc-light-wrap {
+        position: absolute;
+        left: 1230px;
+        top: 230px;
+        width: 740px;
+        height: 740px;
+      }
+      #disc-light-react {
+        position: absolute;
+        inset: 0;
+      }
+      #disc-light {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid var(--line-soft);
+        background: var(--paper);
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+      }
+      #disc-light-halo {
+        position: absolute;
+        left: 13%;
+        top: 13%;
+        width: 74%;
+        height: 74%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          var(--clay-glow) 0%,
+          var(--clay-mist) 55%,
+          rgba(246, 233, 221, 0) 72%
+        );
+      }
+      #disc-light-wave {
+        position: relative;
+        width: 72%;
+        height: 150px;
+      }
+
+      /* ── escenas ──────────────────────────────────────────────────────── */
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+      .pad {
+        position: absolute;
+        left: 140px;
+        right: 140px;
+        top: 0;
+        bottom: 0;
+      }
+      .eyebrow {
+        font-size: 24px;
+        font-weight: 400;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .hairline {
+        height: 2px;
+        background: var(--line);
+        transform-origin: left center;
+      }
+
+      /* Escena 1 */
+      #s1-copy {
+        position: absolute;
+        left: 0;
+        top: 336px;
+        width: 1060px;
+      }
+      #s1-rule {
+        width: 180px;
+        margin: 26px 0 40px;
+      }
+      .s1-line {
+        display: block;
+        font-size: 82px;
+        line-height: 1.07;
+        letter-spacing: -0.02em;
+      }
+      #s1-l1 {
+        font-weight: 400;
+        color: var(--ink);
+      }
+      #s1-l2 {
+        font-weight: 500;
+        color: var(--clay);
+        margin-top: 26px;
+      }
+
+      /* Escena 2 */
+      #s2-copy {
+        position: absolute;
+        left: 0;
+        top: 328px;
+        width: 1240px;
+      }
+      #s2-step {
+        color: var(--clay);
+        font-size: 24px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 34px;
+      }
+      #s2-field {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        width: 1200px;
+        height: 112px;
+        padding: 0 18px 0 38px;
+        border: 2px solid var(--line-field);
+        border-radius: 999px;
+        background: var(--paper);
+      }
+      #s2-dot {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--clay);
+      }
+      #s2-text {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        font-size: 36px;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      #s2-caret {
+        display: inline-block;
+        width: 3px;
+        height: 40px;
+        margin-left: 4px;
+        background: var(--clay);
+      }
+      #s2-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        height: 76px;
+        padding: 0 44px;
+        border-radius: 999px;
+        background: var(--ink);
+        color: var(--sand);
+        font-size: 28px;
+        font-weight: 400;
+      }
+      #s2-suggest {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        width: 1240px;
+        margin-top: 38px;
+      }
+      #s2-suggest-label {
+        font-size: 24px;
+        color: var(--muted);
+        margin-right: 10px;
+      }
+      .chip {
+        border: 2px solid var(--line-field);
+        border-radius: 999px;
+        padding: 12px 26px;
+        font-size: 25px;
+        color: var(--ink-soft);
+      }
+      #s2-chip-1 {
+        border-color: var(--clay-tint);
+      }
+
+      /* Escena 3 */
+      #s3-copy {
+        position: absolute;
+        left: 0;
+        top: 300px;
+        width: 700px;
+      }
+      #s3-title {
+        margin-top: 26px;
+        font-size: 56px;
+        font-weight: 400;
+        line-height: 1.12;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+      }
+      #s3-title em {
+        font-style: normal;
+        font-weight: 500;
+        color: var(--clay);
+      }
+      #s3-note-rule {
+        width: 140px;
+        margin: 46px 0 30px;
+      }
+      #s3-note {
+        font-size: 34px;
+        line-height: 1.45;
+        color: var(--ink-soft);
+        max-width: 620px;
+      }
+      #s3-card {
+        position: absolute;
+        right: 0;
+        top: 292px;
+        width: 820px;
+        padding: 46px 48px 40px;
+        background: var(--paper);
+        border: 2px solid var(--line-soft);
+        border-radius: 4px;
+      }
+      #s3-card-title {
+        font-size: 24px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 34px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 13px 14px;
+        border-radius: 3px;
+      }
+      .row-dot {
+        width: 12px;
+        height: 12px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--clay-bar);
+      }
+      #s3-row-3 .row-dot {
+        background: var(--clay);
+      }
+      .row-label {
+        margin-right: auto;
+        font-size: 31px;
+        color: var(--ink-soft);
+      }
+      .row-min {
+        font-size: 26px;
+        color: var(--muted);
+      }
+
+      /* Escena 4 — el reproductor, tema oscuro */
+      #s4-wordmark {
+        position: absolute;
+        left: 140px;
+        top: 96px;
+        width: 190px;
+        opacity: 0.5;
+      }
+      #s4-copy {
+        position: absolute;
+        left: 140px;
+        top: 404px;
+        width: 620px;
+      }
+      #s4-label {
+        font-size: 24px;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--night-soft);
+        margin-bottom: 30px;
+      }
+      #s4-phases {
+        position: relative;
+        height: 122px;
+      }
+      .phase {
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-size: 100px;
+        font-weight: 300;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: var(--night-text);
+        white-space: nowrap;
+      }
+      .phase b {
+        font-weight: 300;
+        color: var(--night-disc);
+      }
+      #s4-disc-wrap {
+        position: absolute;
+        left: 1110px;
+        top: 250px;
+        width: 440px;
+        height: 440px;
+      }
+      #s4-disc {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid var(--night-ring);
+      }
+      #s4-disc-fill {
+        position: absolute;
+        inset: 8%;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(196, 169, 143, 0.5) 0%,
+          rgba(196, 169, 143, 0.14) 58%,
+          rgba(196, 169, 143, 0) 74%
+        );
+      }
+      #s4-wave {
+        position: absolute;
+        left: 1070px;
+        top: 762px;
+        width: 520px;
+        height: 96px;
+      }
+      #s4-bar-track {
+        position: absolute;
+        left: 140px;
+        top: 968px;
+        width: 1640px;
+        height: 4px;
+        background: var(--night-track);
+      }
+      #s4-bar-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: var(--clay);
+        transform-origin: left center;
+      }
+
+      /* Escena 5 — cierre */
+      #s5-stack {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 372px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      #s5-wordmark {
+        display: block;
+        width: 700px;
+      }
+      #s5-rule {
+        width: 700px;
+        height: 2px;
+        background: var(--night-track);
+        transform-origin: center;
+        margin: 52px 0 40px;
+      }
+      #s5-tagline {
+        font-size: 34px;
+        font-weight: 300;
+        color: var(--night-soft);
+      }
+      #s5-url {
+        margin-top: 24px;
+        font-size: 28px;
+        letter-spacing: 0.16em;
+        color: var(--night-faint);
+      }
+
+      /* Onda: mismas alturas que Wave.tsx, a escala de video. */
+      .wave {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .wave i {
+        display: block;
+        flex: 1;
+        min-width: 3px;
+        max-width: 6px;
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-lhcf" id="root" data-composition-id="main" data-start="0" data-width="1920" data-height="1080" data-duration="23" data-fps="30">
+      <!-- fondos persistentes -->
+      <div data-hf-id="hf-8qlz" id="bg-light" class="layer"></div>
+      <div data-hf-id="hf-rvex" id="bg-dark" class="layer"><div data-hf-id="hf-j2ld" id="bg-dark-glow"></div></div>
+
+      <!-- El disco cruza las escenas 1→3: es la continuidad de la pieza.
+           Decorativo y deliberadamente sangrado por el borde en 2 y 3. -->
+      <div data-hf-id="hf-nam5" id="disc-light-wrap" data-layout-allow-overflow="true">
+        <div data-hf-id="hf-lgav" id="disc-light-react">
+          <div data-hf-id="hf-j90h" id="disc-light">
+            <div data-hf-id="hf-epbo" id="disc-light-halo"></div>
+            <div data-hf-id="hf-v87l" id="disc-light-wave" class="wave"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Escena 1 — el hero ─────────────────────────────────────────── -->
+      <section data-hf-id="hf-ix4b" id="s1" class="clip" data-start="0" data-duration="4.45" data-track-index="0">
+        <div data-hf-id="hf-tjp3" class="pad">
+          <div data-hf-id="hf-5js1" id="s1-copy">
+            <p data-hf-id="hf-95jb" id="s1-eyebrow" class="eyebrow">Meditaciones generadas</p>
+            <div data-hf-id="hf-zu7n" id="s1-rule" class="hairline"></div>
+            <span data-hf-id="hf-wknn" id="s1-l1" class="s1-line">No busques entre las meditaciones que ya existen.</span>
+            <span data-hf-id="hf-9sre" id="s1-l2" class="s1-line">Crea la tuya.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Escena 2 — la intención ─────────────────────────────────────── -->
+      <section data-hf-id="hf-1m45" id="s2" class="clip" data-start="4" data-duration="5.19" data-track-index="1">
+        <div data-hf-id="hf-9xbr" class="pad">
+          <div data-hf-id="hf-1lvw" id="s2-copy">
+            <p data-hf-id="hf-8aue" id="s2-step">01 — Intención</p>
+            <div data-hf-id="hf-9l1h" id="s2-field">
+              <span data-hf-id="hf-fqyb" id="s2-dot"></span>
+              <span data-hf-id="hf-ex5n" id="s2-text"><span data-hf-id="hf-56dq" id="s2-typed"></span><span data-hf-id="hf-6h6n" id="s2-caret"></span></span>
+              <span data-hf-id="hf-wbi9" id="s2-cta">Continuar</span>
+            </div>
+            <div data-hf-id="hf-b7qv" id="s2-suggest">
+              <span data-hf-id="hf-3kji" id="s2-suggest-label">Sugerencias</span>
+              <span data-hf-id="hf-opup" id="s2-chip-1" class="chip">No logro dormir por el trabajo</span>
+              <span data-hf-id="hf-2alf" id="s2-chip-2" class="chip">Ansiedad a fin de mes</span>
+              <span data-hf-id="hf-08ib" id="s2-chip-3" class="chip">Antes de una conversación difícil</span>
+              <span data-hf-id="hf-dhsg" id="s2-chip-4" class="chip">Cinco minutos y volver</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Escena 3 — plantilla + tramos ───────────────────────────────── -->
+      <section data-hf-id="hf-4p9p" id="s3" class="clip" data-start="8.74" data-duration="7.25" data-track-index="2">
+        <div data-hf-id="hf-9j0q" class="pad">
+          <div data-hf-id="hf-vz5z" id="s3-copy">
+            <p data-hf-id="hf-81ue" id="s3-eyebrow" class="eyebrow">Plantilla + tramos</p>
+            <h2 data-hf-id="hf-5lph" id="s3-title">Once minutos ya existen.<br data-hf-id="hf-x5px"><em data-hf-id="hf-7l91">Cuatro se escriben para ti.</em></h2>
+            <div data-hf-id="hf-mpcu" id="s3-note-rule" class="hairline"></div>
+            <p data-hf-id="hf-susv" id="s3-note">Solo el punto de color se escribe para ti.</p>
+          </div>
+          <div data-hf-id="hf-xtu2" id="s3-card">
+            <div data-hf-id="hf-y45p" id="s3-card-title">Anatomía de una sesión de 15 minutos</div>
+            <div data-hf-id="hf-d5yt" id="s3-row-1" class="row">
+              <span data-hf-id="hf-zspx" class="row-dot"></span><span data-hf-id="hf-i514" class="row-label">Respiración guiada</span><span data-hf-id="hf-lbd6" class="row-min">2 min</span>
+            </div>
+            <div data-hf-id="hf-h42u" id="s3-row-2" class="row">
+              <span data-hf-id="hf-nud5" class="row-dot"></span><span data-hf-id="hf-le94" class="row-label">Entrada al cuerpo</span><span data-hf-id="hf-p28e" class="row-min">2 min</span>
+            </div>
+            <div data-hf-id="hf-l26v" id="s3-row-3" class="row">
+              <span data-hf-id="hf-p1a8" class="row-dot"></span><span data-hf-id="hf-q2j7" class="row-label">Tu contexto</span><span data-hf-id="hf-sibo" class="row-min">4 min</span>
+            </div>
+            <div data-hf-id="hf-p0aw" id="s3-row-4" class="row">
+              <span data-hf-id="hf-omz7" class="row-dot"></span><span data-hf-id="hf-70qe" class="row-label">Refuerzo e imágenes</span><span data-hf-id="hf-8223" class="row-min">5 min</span>
+            </div>
+            <div data-hf-id="hf-pryp" id="s3-row-5" class="row">
+              <span data-hf-id="hf-mng2" class="row-dot"></span><span data-hf-id="hf-rrpw" class="row-label">Cierre</span><span data-hf-id="hf-pgjf" class="row-min">2 min</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Escena 4 — el reproductor ───────────────────────────────────── -->
+      <section data-hf-id="hf-y8eb" id="s4" class="clip" data-start="15.29" data-duration="4.77" data-track-index="3">
+        <img data-hf-id="hf-mxep" id="s4-wordmark" src="assets/brand/omtana-wordmark-white.svg" alt="">
+        <div data-hf-id="hf-hzle" id="s4-copy">
+          <p data-hf-id="hf-20je" id="s4-label">Respiración guiada · 4-7-8</p>
+          <div data-hf-id="hf-azfp" id="s4-phases" data-layout-allow-overlap="true">
+            <span data-hf-id="hf-33na" id="s4-phase-in" class="phase">Inhala <b data-hf-id="hf-dcsi">· 4</b></span>
+            <span data-hf-id="hf-a4em" id="s4-phase-out" class="phase">Suelta <b data-hf-id="hf-brke">· 8</b></span>
+          </div>
+        </div>
+        <div data-hf-id="hf-ocf7" id="s4-disc-wrap">
+          <div data-hf-id="hf-f016" id="s4-disc"><div data-hf-id="hf-zyl0" id="s4-disc-fill"></div></div>
+        </div>
+        <div data-hf-id="hf-aiqy" id="s4-wave" class="wave"></div>
+        <div data-hf-id="hf-keey" id="s4-bar-track"><div data-hf-id="hf-gv3e" id="s4-bar-fill"></div></div>
+      </section>
+
+      <!-- ── Escena 5 — cierre ───────────────────────────────────────────── -->
+      <section data-hf-id="hf-25yi" id="s5" class="clip" data-start="19.66" data-duration="3.34" data-track-index="4">
+        <div data-hf-id="hf-w5ou" id="s5-stack">
+          <img data-hf-id="hf-p9fc" id="s5-wordmark" src="assets/brand/omtana-wordmark-white-lg.svg" alt="Omtana">
+          <div data-hf-id="hf-u43o" id="s5-rule"></div>
+          <p data-hf-id="hf-j7vi" id="s5-tagline">Meditaciones generadas</p>
+          <p data-hf-id="hf-8315" id="s5-url">omtana.com</p>
+        </div>
+      </section>
+
+      <div data-hf-id="hf-48ym" id="grain" class="layer"></div>
+
+      <!-- ── audio ───────────────────────────────────────────────────────── -->
+
+      <!-- tecleo: uno de cada cuatro caracteres, semilla fija por índice -->
+      <audio data-hf-id="hf-pd83" id="k1" data-start="5.127" data-duration="0.2" data-track-index="11" data-volume="0.3" src="assets/sfx/keyboard/keypress-003.wav"></audio>
+      <audio data-hf-id="hf-6b63" id="k2" data-start="5.353" data-duration="0.2" data-track-index="12" data-volume="0.28" src="assets/sfx/keyboard/keypress-014.wav"></audio>
+      <audio data-hf-id="hf-95qo" id="k3" data-start="5.58" data-duration="0.2" data-track-index="13" data-volume="0.3" src="assets/sfx/keyboard/keypress-007.wav"></audio>
+      <audio data-hf-id="hf-tedp" id="k4" data-start="5.807" data-duration="0.2" data-track-index="14" data-volume="0.27" src="assets/sfx/keyboard/keypress-022.wav"></audio>
+      <audio data-hf-id="hf-rr8p" id="k5" data-start="6.033" data-duration="0.2" data-track-index="15" data-volume="0.3" src="assets/sfx/keyboard/keypress-011.wav"></audio>
+      <audio data-hf-id="hf-1l88" id="k6" data-start="6.26" data-duration="0.2" data-track-index="16" data-volume="0.28" src="assets/sfx/keyboard/keypress-031.wav"></audio>
+      <audio data-hf-id="hf-sscu" id="k7" data-start="6.487" data-duration="0.2" data-track-index="17" data-volume="0.3" src="assets/sfx/keyboard/keypress-019.wav"></audio>
+
+      <audio data-hf-id="hf-2nja" id="sfx-cta" data-start="7.2" data-duration="0.01" data-track-index="18" data-volume="0.45" src="assets/sfx/interface/click_003.ogg"></audio>
+      <audio data-hf-id="hf-ad4x" id="sfx-card" data-start="8.7" data-duration="0.18" data-track-index="19" data-volume="0.18" src="assets/sfx/impact/impactSoft_medium_001.ogg"></audio>
+      <!-- La respiración, sintetizada como la sintetiza la app: ruido rosa
+           filtrado a la banda de un aliento, que sube al inhalar y cae al
+           soltar. Ver `breath_sounds` en src/lib/breathing.ts. -->
+      <audio id="breath-in" data-start="16.15" data-duration="2.6" data-track-index="21" data-volume="0.3" src="assets/sfx/breath/breath-in.wav"></audio>
+      <audio id="breath-out" data-start="18.56" data-duration="2" data-track-index="22" data-volume="0.28" src="assets/sfx/breath/breath-out.wav"></audio>
+
+      <audio data-hf-id="hf-auqn" id="sfx-bell" data-start="19.62" data-duration="1.48" data-track-index="20" data-volume="0.4" src="assets/sfx/impact/impactBell_heavy_000.ogg"></audio>
+    </div>
+
+    <script>
+      /* ─────────────────────────────────────────────────────────────────────
+         Omtana — brag. Todo lo visual sale del propio proyecto: los tokens de
+         globals.css, el tema `oscuro` de src/lib/video/brand.ts, la copia de
+         src/lib/i18n/es.ts y el reparto de src/lib/session-plan.ts.
+         ───────────────────────────────────────────────────────────────────── */
+
+      /* barHeights, verbatim de src/components/Wave.tsx. Determinista: misma
+         curva en el servidor, en el navegador y en el render. */
+      function barHeights(count, maxHeight) {
+        var out = [];
+        for (var i = 0; i < count; i++) {
+          var w =
+            Math.sin(i * 0.37) * 0.5 + Math.sin(i * 0.11) * 0.35 + Math.sin(i * 1.7) * 0.15;
+          out.push(Math.max(0.12, Math.abs(w)) * maxHeight);
+        }
+        return out;
+      }
+
+      function fillWave(el, count, maxHeight, color) {
+        var hs = barHeights(count, maxHeight);
+        var html = "";
+        for (var i = 0; i < hs.length; i++) {
+          html +=
+            '<i style="height:' + hs[i].toFixed(1) + "px;background:" + color + '"></i>';
+        }
+        el.innerHTML = html;
+      }
+
+      fillWave(document.getElementById("disc-light-wave"), 40, 150, "var(--clay)");
+      fillWave(document.getElementById("s4-wave"), 72, 96, "var(--night-disc)");
+
+      var TYPED = "No logro dormir por el trabajo";
+      var typedEl = document.getElementById("s2-typed");
+
+      var tl = gsap.timeline({ paused: true });
+
+      /* ── fondo: el cambio de tema que hace la propia app ─────────────── */
+      tl.fromTo("#bg-dark", { opacity: 0 }, { opacity: 1, duration: 0.7, ease: "power1.inOut" }, 15.44);
+
+      /* ── el disco, cruzando las escenas 1→3 ──────────────────────────── */
+      tl.fromTo("#disc-light", { scale: 0.88 }, { scale: 1.04, duration: 4.45, ease: "sine.inOut" }, 0)
+        /* se va al borde derecho y baja a segundo plano */
+        .to("#disc-light-wrap", { x: 130, y: 30, duration: 1.1, ease: "power2.inOut" }, 4.0)
+        .to("#disc-light-wrap", { opacity: 0.34, duration: 0.8, ease: "power1.out" }, 4.0)
+        /* y en la escena 3 se recoge en la esquina baja, detrás del texto */
+        .to("#disc-light-wrap", { x: -1130, y: 520, scale: 0.68, duration: 1.4, ease: "power2.inOut" }, 8.74)
+        .to("#disc-light-wrap", { opacity: 0.17, duration: 1.0, ease: "power1.out" }, 8.74)
+        .to("#disc-light-wrap", { opacity: 0, duration: 0.5, ease: "power1.in" }, 15.29);
+
+      /* ── Escena 1 — el hero ──────────────────────────────────────────── */
+      tl.fromTo("#s1-eyebrow", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 0.1)
+        .fromTo("#s1-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.7, ease: "power3.out" }, 0.3)
+        .fromTo("#s1-l1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 0.45)
+        /* el giro: la primera línea cede y entra la segunda */
+        .to("#s1-l1", { color: "#6b6157", duration: 0.6, ease: "power1.inOut" }, 2.0)
+        .fromTo("#s1-l2", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.65, ease: "power3.out" }, 2.0)
+        .to("#s1", { opacity: 0, duration: 0.45, ease: "power1.inOut" }, 4.0);
+
+      /* ── Escena 2 — la intención ─────────────────────────────────────── */
+      tl.fromTo("#s2", { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power1.inOut" }, 4.0)
+        .fromTo("#s2-step", { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 4.2)
+        .fromTo("#s2-field", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 4.25)
+        .fromTo(
+          "#s2-suggest > *",
+          { opacity: 0, y: 16 },
+          { opacity: 1, y: 0, duration: 0.45, ease: "power2.out", stagger: 0.08 },
+          4.55
+        );
+
+      /* La intención se escribe. El texto sale de la posición del timeline, no
+         de un reloj, así que cualquier seek reconstruye el mismo fotograma. */
+      var typeState = { n: 0 };
+      tl.to(
+        typeState,
+        {
+          n: TYPED.length,
+          duration: 1.7,
+          ease: "none",
+          onUpdate: function () {
+            typedEl.textContent = TYPED.slice(0, Math.round(typeState.n));
+          },
+        },
+        4.9
+      );
+      /* el caret late, con repeat finito */
+      tl.to("#s2-caret", { opacity: 0.15, duration: 0.4, ease: "none", yoyo: true, repeat: 4 }, 4.9)
+        .to("#s2-caret", { opacity: 0, duration: 0.3, ease: "power1.out" }, 7.0)
+        /* "Continuar" se presiona */
+        .to("#s2-cta", { scale: 0.96, duration: 0.11, ease: "power2.in" }, 7.2)
+        .to("#s2-cta", { scale: 1, duration: 0.22, ease: "power2.out" }, 7.32)
+        .to("#s2", { opacity: 0, duration: 0.45, ease: "power1.inOut" }, 8.74);
+
+      /* ── Escena 3 — plantilla + tramos ───────────────────────────────── */
+      // la tarjeta entra acá: el plano más largo se gana su propio tiempo
+      tl.fromTo("#s3", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.inOut" }, 8.74)
+        .fromTo("#s3-card", { opacity: 0, y: 34, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 0.55, ease: "power3.out" }, 8.74)
+        .fromTo("#s3-eyebrow", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.5, ease: "power2.out" }, 8.9)
+        .fromTo("#s3-title", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 9.0);
+
+      // una fila cada 0.54 s: rápido de ver, y el set completo queda 3.8 s en pantalla
+      var ROW_BEATS = [9.29, 9.83, 10.37, 10.93, 11.46];
+      for (var r = 0; r < ROW_BEATS.length; r++) {
+        tl.fromTo(
+          "#s3-row-" + (r + 1),
+          { opacity: 0, x: -18 },
+          { opacity: 1, x: 0, duration: 0.35, ease: "power2.out" },
+          ROW_BEATS[r]
+        );
+      }
+
+      /* el único punto de color: el tramo que se escribe para la persona */
+      tl.to("#s3-row-3 .row-dot", { scale: 1.45, duration: 0.24, ease: "power2.out" }, 12.02)
+        .to("#s3-row-3 .row-dot", { scale: 1, duration: 0.45, ease: "power2.inOut" }, 12.26)
+        .to("#s3-row-3", { backgroundColor: "#f6e9dd", duration: 0.5, ease: "power1.out" }, 12.02)
+        .to("#s3-row-3 .row-label", { color: "#241f1a", duration: 0.5, ease: "power1.out" }, 12.02)
+        .fromTo("#s3-note-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "power3.out" }, 12.4)
+        .fromTo("#s3-note", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 12.55)
+        .to("#s3", { opacity: 0, duration: 0.45, ease: "power1.inOut" }, 15.29);
+
+      /* ── Escena 4 — el reproductor ───────────────────────────────────── */
+      tl.fromTo("#s4", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power1.inOut" }, 15.85)
+        .fromTo("#s4-disc", { scale: 0.84 }, { scale: 0.88, duration: 0.35, ease: "sine.out" }, 15.85)
+        .fromTo("#s4-bar-fill", { scaleX: 0.17 }, { scaleX: 0.31, duration: 4.2, ease: "none" }, 15.85)
+        .fromTo("#s4-label", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.55, ease: "power2.out" }, 16.0)
+        /* inhalar: el disco se abre con la fase */
+        .fromTo("#s4-phase-in", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 16.2)
+        .to("#s4-disc", { scale: 1.1, duration: 2.36, ease: "sine.inOut" }, 16.2)
+        .fromTo("#s4-disc-fill", { opacity: 0.55 }, { opacity: 1, duration: 2.36, ease: "sine.inOut" }, 16.2)
+        // la exhalación larga, que es donde el plano respira de verdad
+        .to("#s4-phase-in", { opacity: 0, y: -16, duration: 0.4, ease: "power2.in" }, 18.56)
+        .fromTo("#s4-phase-out", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 18.56)
+        .to("#s4-disc", { scale: 0.86, duration: 1.5, ease: "sine.inOut" }, 18.56)
+        .to("#s4-disc-fill", { opacity: 0.5, duration: 1.5, ease: "sine.inOut" }, 18.56)
+        .to("#s4", { opacity: 0, duration: 0.4, ease: "power1.inOut" }, 19.66);
+
+      /* ── Escena 5 — cierre ───────────────────────────────────────────── */
+      // aterriza el wordmark
+      tl.fromTo("#s5", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power1.inOut" }, 19.66)
+        .fromTo("#s5-wordmark", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }, 19.66)
+        .fromTo("#s5-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "power3.out" }, 20.4)
+        .fromTo("#s5-tagline", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 20.75)
+        .fromTo("#s5-url", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }, 21.28);
+
+      /* ── vida ambiente ────────────────────────────────────────────────
+         Sin música no hay energía a la que reaccionar, así que el halo y el
+         resplandor respiran por su cuenta: ciclos largos y contados, porque
+         `repeat: -1` no se puede renderizar. */
+      tl.to(
+        "#disc-light-react",
+        { scale: 1.035, duration: 2.55, ease: "sine.inOut", yoyo: true, repeat: 4 },
+        0,
+      ).to(
+        "#bg-dark-glow",
+        { opacity: 0.84, duration: 2.1, ease: "sine.inOut", yoyo: true, repeat: 2 },
+        15.44,
+      );
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

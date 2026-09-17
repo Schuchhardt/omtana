@@ -1,0 +1,6 @@
+# Fotogramas de revisión: los escupe `npx hyperframes snapshot` y pesan más que
+# el video. Se regeneran cuando hagan falta.
+composition/snapshots/
+
+# Caché de miniaturas del Studio de hyperframes.
+composition/.thumbnails/
