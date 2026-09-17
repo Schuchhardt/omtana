@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Wave } from "@/components/Wave";
 import { BreathCircle } from "@/components/BreathCircle";
+import { LaunchVideo } from "@/components/LaunchVideo";
 import { Faq } from "@/components/Faq";
 import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
@@ -45,8 +46,21 @@ export default async function LandingPage() {
           </BreathCircle>
         </section>
 
+        {/* Video */}
+        <section>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
+            <div>
+              <p className="om-eyebrow mb-[14px]">{t.video.eyebrow}</p>
+              <h2 className="text-[clamp(26px,3.4vw,36px)]">{t.video.title}</h2>
+            </div>
+            <p className="max-w-[46ch] text-[17px] leading-[1.6] text-muted">{t.video.body}</p>
+          </div>
+          <LaunchVideo t={t.video} />
+          <p className="mt-3 font-mono text-[13px] text-faint">{t.video.caption}</p>
+        </section>
+
         {/* Tres pasos */}
-        <section className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-px overflow-hidden rounded-card border border-line bg-line">
+        <section className="mt-24 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-px overflow-hidden rounded-card border border-line bg-line">
           {t.steps.map((s) => (
             <div key={s.n} className="bg-paper px-7 py-8">
               <div className="mb-[14px] text-[12px] uppercase tracking-[0.18em] text-clay">

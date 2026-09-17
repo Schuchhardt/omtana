@@ -33,7 +33,7 @@ export const en: Copy = {
     title: "Omtana — Generated meditations",
     description:
       "Omtana builds the meditation around your case: script, voice and music. Every session opens with breathing.",
-    ogDescription: "Stop hunting for the meditation that comes closest. Tell us what you need today.",
+    ogDescription: "Don't go looking through meditations that already exist. Create your own.",
     titles: {
       access: "Sign in",
       catalog: "Public catalogue",
@@ -52,12 +52,20 @@ export const en: Copy = {
 
   hero: {
     eyebrow: "Generated meditations",
-    title: "Stop hunting for the meditation that comes closest. Tell us what you need today.",
+    title: "Don't go looking through meditations that already exist. Create your own.",
     body: "Omtana builds the meditation around your case: script, voice and music. Every session opens with breathing, because that is what gets you to the state you are after sooner.",
     ctaHome: "Go to my home",
     ctaSignUp: "Create a free account",
     ctaListen: "Listen to a 5-minute one",
     note: "No card required. The public catalogue is always free.",
+  },
+
+  video: {
+    eyebrow: "On video",
+    title: "How a session gets built",
+    body: "You write what you need, the template lays itself out around your segment, and the session opens by breathing. Twenty-three seconds.",
+    playAria: "Play the intro video",
+    caption: "23 s · with sound",
   },
 
   steps: [

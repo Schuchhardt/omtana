@@ -31,7 +31,7 @@ export const es = {
     title: "Omtana — Meditaciones generadas",
     description:
       "Omtana arma la meditación alrededor de tu caso: guion, voz y música. Cada sesión abre con respiración.",
-    ogDescription: "No busques la meditación que más se acerque. Dinos qué necesitas hoy.",
+    ogDescription: "No busques entre las meditaciones que ya existen. Crea la tuya.",
     titles: {
       access: "Acceso",
       catalog: "Catálogo público",
@@ -50,12 +50,20 @@ export const es = {
 
   hero: {
     eyebrow: "Meditaciones generadas",
-    title: "No busques la meditación que más se acerque. Dinos qué necesitas hoy.",
+    title: "No busques entre las meditaciones que ya existen. Crea la tuya.",
     body: "Omtana arma la meditación alrededor de tu caso: guion, voz y música. Cada sesión abre con respiración, porque es lo que te lleva antes al estado que buscas.",
     ctaHome: "Ir a mi inicio",
     ctaSignUp: "Crear cuenta gratis",
     ctaListen: "Escuchar una de 5 minutos",
     note: "Sin tarjeta. El catálogo público es gratis siempre.",
+  },
+
+  video: {
+    eyebrow: "En video",
+    title: "Cómo se arma una sesión",
+    body: "Escribes lo que necesitas, la plantilla se reparte alrededor de tu tramo y la sesión abre respirando. Son veintitrés segundos.",
+    playAria: "Reproducir el video de presentación",
+    caption: "23 s · con sonido",
   },
 
   steps: [
