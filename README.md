@@ -399,7 +399,11 @@ largo cuando ya está publicado). Cada publicación queda en
 el mismo export en la misma red.
 
 Necesita `ZERNIO_API_KEY` (zernio.com; dos cuentas conectadas son gratis, desde
-la tercera USD 6 al mes cada una). Para publicar en YouTube videos de más de 15
+la tercera USD 6 al mes cada una). Si el workspace de Zernio tiene cuentas de
+varias marcas, hay que nombrar las de Omtana en `PUBLISH_ACCOUNTS` (usuario o
+id, separadas por coma) o con `--cuentas-usar`: con más de una cuenta en una
+red y sin esa lista, el script se niega a publicar, porque el video saldría en
+todas. Para publicar en YouTube videos de más de 15
 minutos el canal tiene que estar verificado por teléfono. Instagram exige una
 cuenta Business o Creator ligada a una página de Facebook. Sin la key, los
 videos se generan igual y se suben a mano desde `out/video/`.

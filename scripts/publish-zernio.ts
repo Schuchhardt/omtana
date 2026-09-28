@@ -11,6 +11,8 @@
  * Opciones de publicación:
  *   --formato vertical|youtube|cuadrado   solo ese formato (por defecto, los tres)
  *   --plataformas youtube,instagram       o PUBLISH_PLATFORMS (por defecto youtube,instagram)
+ *   --cuentas-usar omtana,omtana.cl       o PUBLISH_ACCOUNTS: a qué cuentas (usuario o id) va;
+ *                                         obligatorio si hay más de una cuenta por red
  *   --en 48                               horas desde ahora (por defecto 48)
  *   --programar 2026-10-01T10:00          hora local en PUBLISH_TIMEZONE (America/Santiago)
  *   --ahora                               publica en el momento, sin ventana
@@ -144,6 +146,59 @@ async function accounts() {
   log.done("Las que se usan son las activas de las redes pedidas en --plataformas.");
 }
 
+/**
+ * A qué cuentas se publica.
+ *
+ * Un workspace de Zernio puede tener conectadas cuentas de varias marcas, y
+ * `buildPost` manda el video a **todas** las activas de cada red pedida. Sin
+ * esta guarda, una meditación de Omtana podía salir en el Instagram de otro
+ * proyecto. Por eso: si hay más de una cuenta activa en alguna red pedida,
+ * hay que nombrar cuáles con PUBLISH_ACCOUNTS (o --cuentas-usar), por usuario
+ * o por id; con una sola por red, esa es la que va y se dice cuál.
+ */
+function chooseAccounts(
+  list: ZernioAccount[],
+  raw: string | undefined,
+  requested: Platform[],
+): ZernioAccount[] {
+  const active = list.filter((a) => a.isActive);
+  const label = (a: ZernioAccount) => `${a.platform}/${a.username ?? a.displayName ?? a._id}`;
+
+  let chosen = active;
+  if (raw && raw.trim()) {
+    const wanted = raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const matches = (a: ZernioAccount, token: string) =>
+      a._id.toLowerCase() === token ||
+      (a.username ?? "").toLowerCase() === token ||
+      (a.displayName ?? "").toLowerCase() === token;
+
+    const missing = wanted.filter((token) => !active.some((a) => matches(a, token)));
+    if (missing.length > 0) {
+      fatal(
+        `No hay cuenta activa que se llame "${missing.join('", "')}".\n` +
+          `    Conectadas: ${active.map(label).join(", ")}`,
+      );
+    }
+    chosen = active.filter((a) => wanted.some((token) => matches(a, token)));
+  } else {
+    const crowded = requested.filter((p) => active.filter((a) => a.platform === p).length > 1);
+    if (crowded.length > 0) {
+      const detail = crowded
+        .map((p) => `${p}: ${active.filter((a) => a.platform === p).map((a) => a.username ?? a._id).join(", ")}`)
+        .join("\n      ");
+      fatal(
+        "Hay más de una cuenta conectada en una red pedida y no se dijo cuál usar:\n" +
+          `      ${detail}\n` +
+          "    Nómbralas en PUBLISH_ACCOUNTS=usuario,usuario (o --cuentas-usar) para no publicar en la de otro proyecto.",
+      );
+    }
+  }
+
+  const used = chosen.filter((a) => requested.includes(a.platform as Platform));
+  if (used.length > 0) log.info(`Cuentas: ${used.map(label).join(", ")}`);
+  return chosen;
+}
+
 /* ───────────────────────── publicar ───────────────────────── */
 
 async function publish(args: Args) {
@@ -171,7 +226,11 @@ async function publish(args: Args) {
   // Sin la key se puede planear igual: se asume una cuenta activa por red.
   let accounts: ZernioAccount[] | null = null;
   if (process.env.ZERNIO_API_KEY) {
-    accounts = await listAccounts();
+    accounts = chooseAccounts(
+      await listAccounts(),
+      args.values.get("cuentas-usar") ?? process.env.PUBLISH_ACCOUNTS,
+      requested,
+    );
   } else {
     log.warn("Sin ZERNIO_API_KEY no se pueden consultar las cuentas conectadas; se asume una activa por red.");
   }
