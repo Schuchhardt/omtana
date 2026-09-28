@@ -75,27 +75,90 @@ export const SITE = "omtana.com";
 
 export function cardCopy(input: CardInput): CardCopy {
   const s = STRINGS[input.locale] ?? STRINGS.es;
+  const withBreathing = Boolean(input.breathingName) && input.breathingSeconds > 0;
 
   return {
     title: input.title,
     summary: input.intentionSummary.trim(),
-    sheet: `${s.minutes(input.durationMinutes)} · ${s.guidedBy(input.voiceName)}`,
-    breathing:
-      input.breathingName && input.breathingSeconds > 0
-        ? // En reloj y no en minutos redondos: la respiración dura dos y medio,
-          // y "3 min" en la carta promete medio minuto que no existe.
-          s.opensWith(input.breathingName, formatClock(input.breathingSeconds))
-        : s.noBreathing,
+    // La carta cuenta el orden de lo que viene: primero el ejercicio, después
+    // la meditación. Quien llega decide con eso si se queda.
+    sheet: withBreathing
+      ? `${s.thenMeditation(bodyMinutes(input))} · ${s.guidedBy(input.voiceName)}`
+      : `${s.minutes(input.durationMinutes)} · ${s.guidedBy(input.voiceName)}`,
+    breathing: withBreathing
+      ? // En reloj y no en minutos redondos: la respiración dura dos y medio,
+        // y "3 min" en la carta promete medio minuto que no existe.
+        s.opensWith(input.breathingName!, formatClock(input.breathingSeconds))
+      : s.noBreathing,
     site: SITE,
     closing: s.closing,
     invite: s.invite,
   };
 }
 
+/**
+ * Lo que la voz dice sobre la presentación.
+ *
+ * Once segundos de carta muda eran once segundos de silencio al principio del
+ * video, que es donde más gente se va. La misma voz de la sesión explica qué
+ * viene — el ejercicio primero, la meditación después — y la carta lo muestra
+ * escrito mientras tanto.
+ */
+export function introSpeech(input: CardInput): string {
+  const s = STRINGS[input.locale] ?? STRINGS.es;
+  const title = lowerFirst(input.title.trim().replace(/[.…]+$/, ""));
+
+  if (input.breathingName && input.breathingSeconds > 0) {
+    return s.speech(
+      spokenName(input.breathingName),
+      s.clockWords(input.breathingSeconds),
+      bodyMinutes(input),
+      title,
+    );
+  }
+  return s.speechNoBreathing(input.durationMinutes, title);
+}
+
+/**
+ * Cómo se dice el ejercicio.
+ *
+ * "Caja 4-4-4-4" leído por la voz es "caja cuatro cuatro cuatro cuatro": se
+ * queda con la palabra. Un nombre que es solo números ("4-7-8") se lee con
+ * pausas, "4, 7, 8", que es como lo dice cualquiera.
+ */
+function spokenName(name: string): string {
+  const words = name.replace(/[\d\-–·\s]+/g, " ").trim();
+  return words ? words.toLowerCase() : name.replace(/-/g, ", ");
+}
+
+/** Los minutos de meditación propiamente tal, descontado el ejercicio. */
+function bodyMinutes(input: CardInput): number {
+  return Math.max(1, Math.round((input.durationMinutes * 60 - input.breathingSeconds) / 60));
+}
+
+function lowerFirst(text: string): string {
+  return text ? text[0].toLowerCase() + text.slice(1) : text;
+}
+
+/** "dos minutos y medio": la voz no lee "2:30". */
+function minutesInWords(seconds: number, words: string[], minute: string, minutes: string, half: string): string {
+  const whole = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  const n = words[whole] ?? String(whole);
+  const unit = whole === 1 ? minute : minutes;
+  return rest >= 20 && rest <= 40 ? `${n} ${unit} ${half}` : `${n} ${unit}`;
+}
+
 interface Strings {
   suffix: (minutes: number) => string;
   minutes: (n: number) => string;
   opensWith: (name: string, clock: string) => string;
+  /** "Después, 18 minutos de meditación". */
+  thenMeditation: (minutes: number) => string;
+  /** Lo que la voz dice en la presentación. */
+  speech: (breathingName: string, clockWords: string, minutes: number, title: string) => string;
+  speechNoBreathing: (minutes: number, title: string) => string;
+  clockWords: (seconds: number) => string;
   noBreathing: string;
   closing: string;
   invite: string;
@@ -118,7 +181,15 @@ const STRINGS: Record<string, Strings> = {
   es: {
     suffix: (m) => `Meditación guiada de ${m} minutos`,
     minutes: (n) => `${n} minutos`,
-    opensWith: (n, c) => `Abre con respiración guiada ${n} · ${c}`,
+    opensWith: (n, c) => `Primero, respiración guiada ${n} · ${c}`,
+    thenMeditation: (m) => `Después, ${m} minutos de meditación`,
+    speech: (n, c, m, t) =>
+      `Esta sesión abre con ${c} de respiración ${n}. ` +
+      `Después, una meditación de ${m} minutos para ${t}.`,
+    speechNoBreathing: (m, t) =>
+      `Esta es una meditación guiada de ${m} minutos para ${t}. Entra directo al cuerpo.`,
+    clockWords: (s) =>
+      minutesInWords(s, ["cero", "un", "dos", "tres", "cuatro", "cinco"], "minuto", "minutos", "y medio"),
     noBreathing: "Sin ejercicio de respiración: entra directo al cuerpo",
     closing: "Esta y más meditaciones en",
     invite: "O genera la tuya, con tu intención y tu contexto",
@@ -143,7 +214,16 @@ const STRINGS: Record<string, Strings> = {
   en: {
     suffix: (m) => `${m}-minute guided meditation`,
     minutes: (n) => `${n} minutes`,
-    opensWith: (n, c) => `Opens with guided ${n} breathing · ${c}`,
+    opensWith: (n, c) => `First, guided ${n} breathing · ${c}`,
+    thenMeditation: (m) => `Then, ${m} minutes of meditation`,
+    speech: (n, c, m, t) =>
+      `This session opens with ${c} of ${n} breathing. ` +
+      `Then, a ${m}-minute meditation to ${t}.`,
+    speechNoBreathing: (m, t) =>
+      `This is a ${m}-minute guided meditation to ${t}. It goes straight into the body.`,
+    clockWords: (s) =>
+      minutesInWords(s, ["zero", "one", "two", "three", "four", "five"], "minute", "minutes", "and a half")
+        .replace(/(\w+) minutes and a half/, "$1 and a half minutes"),
     noBreathing: "No breathing exercise: straight into the body",
     closing: "This and more meditations at",
     invite: "Or make your own, from your intention and your context",
@@ -168,7 +248,15 @@ const STRINGS: Record<string, Strings> = {
   pt: {
     suffix: (m) => `Meditação guiada de ${m} minutos`,
     minutes: (n) => `${n} minutos`,
-    opensWith: (n, c) => `Começa com respiração guiada ${n} · ${c}`,
+    opensWith: (n, c) => `Primeiro, respiração guiada ${n} · ${c}`,
+    thenMeditation: (m) => `Depois, ${m} minutos de meditação`,
+    speech: (n, c, m, t) =>
+      `Esta sessão começa com ${c} de respiração ${n}. ` +
+      `Depois, uma meditação de ${m} minutos para ${t}.`,
+    speechNoBreathing: (m, t) =>
+      `Esta é uma meditação guiada de ${m} minutos para ${t}. Entra direto no corpo.`,
+    clockWords: (s) =>
+      minutesInWords(s, ["zero", "um", "dois", "três", "quatro", "cinco"], "minuto", "minutos", "e meio"),
     noBreathing: "Sem exercício de respiração: entra direto no corpo",
     closing: "Esta e mais meditações em",
     invite: "Ou crie a sua, a partir da sua intenção e do seu contexto",

@@ -138,12 +138,15 @@ export async function clipAudio(
   label: string,
   /** Silencio al final, donde va el cierre de marca del recorte. */
   tailSeconds = 0,
+  /** Fundidos del recorte. En una pieza en bucle son casi nulos: un bajón de volumen en la juntura delata el corte. */
+  fades = { in: 0.8, out: 1.4 },
 ): Promise<{ file: string; seconds: number }> {
   const out = join(work, `recorte-${label}.wav`);
   const tail = tailSeconds > 0 ? `,apad=pad_dur=${tailSeconds.toFixed(2)}` : "";
   await run(FFMPEG_BIN, [
     "-y", "-ss", from.toFixed(3), "-t", length.toFixed(3), "-i", file,
-    "-af", `afade=t=in:st=0:d=0.8,afade=t=out:st=${Math.max(0, length - 1.4).toFixed(2)}:d=1.4${tail}`,
+    "-af",
+    `afade=t=in:st=0:d=${fades.in},afade=t=out:st=${Math.max(0, length - fades.out).toFixed(2)}:d=${fades.out}${tail}`,
     out,
   ]);
   return { file: out, seconds: await durationOf(out) };
@@ -220,6 +223,8 @@ export interface RenderOptions {
   draft?: boolean;
   /** Fundidos de la imagen; sin decir nada, los de la pieza larga. */
   fades?: { in: number; out: number };
+  /** `false` deja solo el riel, sin lo recorrido: para piezas en bucle. */
+  progress?: boolean;
 }
 
 export interface CardOptions {
@@ -336,13 +341,20 @@ export async function renderVideo(opts: RenderOptions): Promise<void> {
   // La barra mide la sesión, no el archivo: llena cuando la voz termina, no
   // cuando termina el cierre.
   const played = `min(1,max(0,(t-${from})/${Math.max(1, to - from).toFixed(2)}))`;
+  // En una pieza en bucle la barra llena que salta a vacía es lo único que
+  // delata la juntura: se deja solo el riel.
   filters.push(
     `[${last}]drawbox=x=${barX}:y=${l.barY}:w=${l.barWidth}:h=${l.barHeight}:` +
       `color=${ff(theme.barTrack)}@0.9:t=fill${inScene}[riel]`,
-    `[riel]drawbox=x=${barX}:y=${l.barY}:w='${l.barWidth}*${played}':` +
-      `h=${l.barHeight}:color=${ff(theme.bar)}:t=fill${inScene}[barra]`,
   );
-  last = "barra";
+  last = "riel";
+  if (opts.progress !== false) {
+    filters.push(
+      `[riel]drawbox=x=${barX}:y=${l.barY}:w='${l.barWidth}*${played}':` +
+        `h=${l.barHeight}:color=${ff(theme.bar)}:t=fill${inScene}[barra]`,
+    );
+    last = "barra";
+  }
 
   if (opts.cards) last = drawCards(filters, last, opts, from, to);
 
@@ -447,15 +459,16 @@ function drawCards(
       );
     });
 
-    line(card.copy.sheet, f.height * 0.6, l.metaSize * 1.15, theme.textFaint, introAlpha, introOn);
+    // En el orden en que va a pasar: primero el ejercicio, después la meditación.
     line(
       card.copy.breathing,
-      f.height * 0.645,
+      f.height * 0.6,
       l.metaSize * 1.15,
       theme.textFaint,
       introAlpha,
       introOn,
     );
+    line(card.copy.sheet, f.height * 0.645, l.metaSize * 1.15, theme.textFaint, introAlpha, introOn);
   }
 
   /* ── cierre ── */

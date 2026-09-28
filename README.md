@@ -282,16 +282,26 @@ vacío en un teléfono.
 Sin decir nada se recorta la respiración cuando la sesión la tiene;
 `--pieza meditacion` fuerza lo otro.
 
-**El largo abre y cierra con una carta.** Quien llega a un video de quince
-minutos decide en los primeros diez segundos si se queda, y lo que necesita
-saber es qué va a pasar: de qué es la sesión, cuánto dura y si abre con
-respiración guiada o entra directo al cuerpo. Eso es la presentación. El cierre
-es la única parte donde Omtana habla de sí misma: el wordmark grande,
-`omtana.com` y la invitación a generar la suya. Las dos van sobre el mismo
-fondo —el degradado sigue moviéndose y la música sigue sonando, así que el
-video no arranca en seco ni termina en corte— y suman veintiún segundos al
-archivo. `--sin-cartas` las apaga. Las piezas de redes no las llevan: en
-veintitrés segundos, once de presentación serían casi todo el video.
+**El largo abre con una presentación hablada y cierra con una carta.** Quien
+llega a un video de quince minutos decide en los primeros diez segundos si se
+queda, y lo que necesita saber es qué va a pasar. La misma voz de la sesión lo
+dice — "esta sesión abre con dos minutos y medio de respiración guiada Caja
+4-4-4-4; después viene una meditación de dieciocho minutos para…" — y la carta
+lo muestra escrito en ese orden: primero el ejercicio, después la meditación.
+La frase se sintetiza una vez por sesión y queda en el bucket
+(`videos/<id>/intro-<hash>.mp3`), así que re-renderizar no la paga de nuevo;
+sin `ELEVENLABS_API_KEY` la carta sale muda y de ocho segundos. El cierre es la
+única parte donde Omtana habla de sí misma: el wordmark grande, `omtana.com` y
+la invitación a generar la suya. Las dos van sobre el mismo fondo —el degradado
+sigue moviéndose y la música sigue sonando— y `--sin-cartas` las apaga.
+
+**Las piezas de redes son de dos clases.** El corte de respiración va en
+**bucle**: empieza en un "inhala", termina donde arrancaría el ciclo siguiente,
+sin fundidos ni cierre, con `omtana.com` fijo bajo el título, para que Instagram
+y TikTok lo repitan sin que se note la juntura. El pasaje de meditación no se
+puede repetir, así que cierra con dos segundos y medio de wordmark y
+`omtana.com` sobre silencio, como el video del landing. Ninguna funde desde
+negro: el primer cuadro es la miniatura.
 
 **La escena es la del reproductor.** Fondo cálido que se mueve despacio, el
 disco respirando con el ejercicio — la misma curva, literalmente: `discLevel`

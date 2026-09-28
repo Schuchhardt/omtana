@@ -25,7 +25,9 @@ import { join, resolve } from "node:path";
 import { log, requireEnv, parseArgs, fatal, type Args } from "./_bootstrap";
 import { db } from "../src/lib/supabase";
 import { downloadAudio, ensureBucket, uploadAudio, FileTooLargeError } from "../src/lib/storage";
-import { ensureFfmpeg } from "../src/lib/generation/audio";
+import { createHash } from "node:crypto";
+import { durationOf, ensureFfmpeg, FFMPEG_BIN, run } from "../src/lib/generation/audio";
+import { synthesize } from "../src/lib/generation/tts";
 import {
   ensureFonts,
   ensureLogo,
@@ -49,7 +51,7 @@ import {
   type Span,
   type SubtitleCue,
 } from "../src/lib/video/subtitles";
-import { cardCopy, SITE, videoCopy } from "../src/lib/video/copy";
+import { cardCopy, introSpeech, SITE, videoCopy } from "../src/lib/video/copy";
 import { breathingSlotSeconds, type BreathingCue, type BreathingStep } from "../src/lib/breathing";
 import type { Intention, Meditation, MeditationSegment, MusicTrack, Voice } from "../src/lib/types";
 
@@ -60,7 +62,7 @@ import type { Intention, Meditation, MeditationSegment, MusicTrack, Voice } from
  * acá no, así que se elige el lado seguro — una música que tapa la voz arruina
  * la pieza y no hay forma de arreglarla sin volver a renderizar.
  */
-const MUSIC_VOLUME = 0.26;
+const MUSIC_VOLUME = 0.4;
 
 /**
  * Qué lleva una pieza: la sesión entera (16:9) o una sola cosa (redes).
@@ -211,18 +213,22 @@ async function exportOne(id: string, opts: ExportOptions) {
      * recortes de redes siguen saliendo de la primera, que es la que va a
      * tiempo con los subtítulos.
      */
-    const withCards =
-      opts.cards && opts.sample === null && opts.formats.includes("youtube")
-        ? await buildTrack({
-            work,
-            voices: [full.voice],
-            music: track?.file ?? null,
-            musicVolume: MUSIC_VOLUME,
-            introSeconds: CARDS.intro,
-            outroSeconds: CARDS.outro,
-            label: "-cartas",
-          })
-        : null;
+    const wantsCards = opts.cards && opts.sample === null && opts.formats.includes("youtube");
+    // La presentación la dice la voz: qué viene primero y de qué es la
+    // meditación. Sin voz (sin clave de ElevenLabs), queda la carta muda y corta.
+    const intro = wantsCards ? await introVoice(meditation, breathing, work) : null;
+    const introLen = intro?.seconds ?? CARDS.intro;
+    const withCards = wantsCards
+      ? await buildTrack({
+          work,
+          voices: intro ? [intro.file, full.voice] : [full.voice],
+          music: track?.file ?? null,
+          musicVolume: MUSIC_VOLUME,
+          introSeconds: intro ? 0 : CARDS.intro,
+          outroSeconds: CARDS.outro,
+          label: "-cartas",
+        })
+      : null;
 
     /* 2 ─ Los subtítulos, medidos sobre la voz sola. */
     const segments = await loadSegments(id, breathing?.seconds ?? 0);
@@ -261,11 +267,24 @@ async function exportOne(id: string, opts: ExportOptions) {
         asked: opts.piece,
       });
       const cards = clip === null && withCards !== null;
-      // Un recorte de verdad (no una muestra) cierra con la marca: dos segundos
-      // y medio de silencio con el wordmark y omtana.com, como el landing.
       const short = clip !== null && opts.sample === null;
+      // El corte de respiración va en bucle — empieza en un "inhala" y termina
+      // donde arrancaría el ciclo siguiente — así que no lleva cierre ni
+      // fundidos: en Instagram y TikTok se repite solo, y la juntura no se
+      // nota. El pasaje de meditación no se puede repetir y cierra con la
+      // marca: dos segundos y medio de silencio con el wordmark y omtana.com.
+      const loop = short && clip!.piece === "respiracion";
+      const outro = short && !loop;
       let audio = clip
-        ? await clipAudio(work, full.file, clip.from, clip.length, formatId, short ? SHORT_OUTRO : 0)
+        ? await clipAudio(
+            work,
+            full.file,
+            clip.from,
+            clip.length,
+            formatId,
+            outro ? SHORT_OUTRO : 0,
+            loop ? { in: 0.12, out: 0.12 } : undefined,
+          )
         : cards
           ? { file: withCards!.file, seconds: withCards!.seconds }
           : { file: full.file, seconds: full.seconds };
@@ -279,11 +298,11 @@ async function exportOne(id: string, opts: ExportOptions) {
 
       // El reloj del video contra el de la sesión: los recortes empiezan más
       // adelante, y la pieza larga empieza antes, por la presentación.
-      const from = clip ? clip.from : cards ? -CARDS.intro : 0;
+      const from = clip ? clip.from : cards ? -introLen : 0;
       const piece = clip?.piece ?? "completa";
       const sessionSeconds = cards
-        ? audio.seconds - CARDS.intro - CARDS.outro
-        : short
+        ? audio.seconds - introLen - CARDS.outro
+        : outro
           ? audio.seconds - SHORT_OUTRO
           : audio.seconds;
       const localCues = shift(cues, from, sessionSeconds);
@@ -331,10 +350,10 @@ async function exportOne(id: string, opts: ExportOptions) {
         layout,
         theme,
         title: titleLine(meditation, breathing, piece),
-        meta: metaLine(meditation, breathing, sessionSeconds, piece),
+        meta: metaLine(meditation, breathing, sessionSeconds, piece, loop),
         cards: cards
           ? {
-              intro: CARDS.intro,
+              intro: introLen,
               outro: CARDS.outro,
               copy: cardCopy({
                 title: meditation.title,
@@ -347,14 +366,16 @@ async function exportOne(id: string, opts: ExportOptions) {
               }),
               logo: await ensureLogo(theme, Math.round(format.width * 0.26)),
             }
-          : short
+          : outro
             ? await shortOutro(theme, format)
             : null,
         out,
         draft: opts.sample !== null,
         // Sin fundido de entrada en los recortes: el primer cuadro es la
-        // miniatura en las redes, y negro no es una miniatura.
-        fades: short ? { in: 0, out: 0.6 } : undefined,
+        // miniatura en las redes, y negro no es una miniatura. En bucle,
+        // tampoco de salida.
+        fades: loop ? { in: 0, out: 0 } : short ? { in: 0, out: 0.6 } : undefined,
+        progress: !loop,
       });
 
       const srt = join(opts.outDir, `${name}.srt`);
@@ -369,7 +390,7 @@ async function exportOne(id: string, opts: ExportOptions) {
         breathingName: breathing?.name ?? null,
         format: formatId,
         piece,
-        chapters: chapters(breathing, segments, cards ? CARDS.intro : 0),
+        chapters: chapters(breathing, segments, cards ? Math.round(introLen) : 0),
       });
       await writeFile(join(opts.outDir, `${name}.json`), `${JSON.stringify(copy, null, 2)}\n`);
 
@@ -584,6 +605,67 @@ const PHASE_LABELS: Record<string, { inhale: string; hold: string; exhale: strin
 /** Cierre de marca de los recortes, en segundos. */
 const SHORT_OUTRO = 2.5;
 
+/**
+ * La presentación, dicha por la misma voz de la sesión.
+ *
+ * Se sintetiza una vez por meditación y queda en el bucket, así que volver a
+ * renderizar no vuelve a pagarla. Con aire antes y después para que no
+ * arranque pegada al fundido ni se pise con el primer "inhala".
+ */
+async function introVoice(
+  meditation: Meditation & { voice: Voice | null; intention: Intention | null },
+  breathing: BreathingPart | null,
+  work: string,
+): Promise<{ file: string; seconds: number } | null> {
+  const voice = meditation.voice;
+  if (!voice?.provider_voice_id) return null;
+
+  const text = introSpeech({
+    title: meditation.title,
+    intentionSummary: meditation.intention?.summary ?? "",
+    locale: meditation.locale,
+    voiceName: voice.name,
+    durationMinutes: Math.round((meditation.duration_seconds + (breathing?.seconds ?? 0)) / 60),
+    breathingName: breathing?.name ?? null,
+    breathingSeconds: breathing?.seconds ?? 0,
+  });
+
+  // La clave del cache lleva el texto: si cambia lo que se dice, se regraba.
+  const hash = createHash("sha1").update(`${voice.provider_voice_id}:${text}`).digest("hex").slice(0, 10);
+  const path = `videos/${meditation.id}/intro-${hash}.mp3`;
+  const mp3 = join(work, "intro.mp3");
+
+  let audio: Buffer | null = null;
+  try {
+    audio = await downloadAudio(path);
+  } catch {
+    /* no está: se graba abajo */
+  }
+
+  if (!audio) {
+    if (!process.env.ELEVENLABS_API_KEY) {
+      log.warn("Sin ELEVENLABS_API_KEY la presentación va muda: la carta se muestra sola.");
+      return null;
+    }
+    audio = await synthesize({ voiceId: voice.provider_voice_id, text, settings: voice.provider_settings });
+    try {
+      await uploadAudio(path, audio);
+    } catch (err) {
+      log.warn(`La presentación no quedó en el bucket — ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  await writeFile(mp3, audio);
+
+  const file = join(work, "intro.wav");
+  await run(FFMPEG_BIN, [
+    "-y", "-i", mp3,
+    "-af", "adelay=900|900,apad=pad_dur=1.1",
+    "-ac", "2", "-ar", "44100",
+    file,
+  ]);
+  return { file, seconds: await durationOf(file) };
+}
+
 /** A cuánto se nivela el audio. Las redes normalizan a −14; el largo va más suave. */
 const LOUDNESS = { short: -14, long: -16 };
 
@@ -625,7 +707,7 @@ function shift(cues: SubtitleCue[], from: number, seconds: number): SubtitleCue[
  * respiración, que es lo que alguien necesita para decidir si se queda; más que
  * eso y ya es una espera antes de lo que vino a hacer.
  */
-const CARDS = { intro: 11, outro: 10 };
+const CARDS = { intro: 8, outro: 8 };
 
 /**
  * Cuánto dura una pieza de redes. El objetivo manda; los extremos solo
@@ -801,11 +883,13 @@ function metaLine(
   breathing: BreathingPart | null,
   seconds: number,
   piece: Piece,
+  loop = false,
 ): string {
   const voice = meditation.voice?.name ?? "Omtana";
 
-  // El ejercicio ya está en el título de esta pieza; acá solo queda quién lo dice.
-  if (piece === "respiracion" && breathing) return voice;
+  // El ejercicio ya está en el título de esta pieza; acá solo queda quién lo
+  // dice. En bucle no hay cierre de marca, así que la URL va acá, fija.
+  if (piece === "respiracion" && breathing) return loop ? `${voice} · ${SITE}` : voice;
   if (piece === "meditacion") return `${voice} · Meditación guiada`;
 
   const parts = [voice, `${Math.max(1, Math.round(seconds / 60))} min`];
