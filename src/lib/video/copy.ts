@@ -192,6 +192,15 @@ const STRINGS: Record<string, Strings> = {
   },
 };
 
+/**
+ * La frase del llamado a la acción, sin el enlace: "Crea la tuya en". La usa
+ * la publicación a redes para reconocer la línea en una ficha ya guardada y
+ * para reponerla si el recorte de caracteres se la llevó.
+ */
+export function siteCta(locale: string): string {
+  return (STRINGS[locale] ?? STRINGS.es).site;
+}
+
 /** YouTube corta el título en 100 caracteres y la descripción en 5000. */
 const TITLE_MAX = 100;
 

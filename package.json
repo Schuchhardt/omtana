@@ -17,6 +17,8 @@
     "video": "tsx --conditions=react-server scripts/video.ts",
     "curaduria": "tsx --conditions=react-server scripts/curaduria.ts",
     "youtube": "tsx --conditions=react-server scripts/publish-youtube.ts",
+    "zernio": "tsx --conditions=react-server scripts/publish-zernio.ts",
+    "semanal": "tsx --conditions=react-server scripts/semanal.ts",
     "ci": "tsx --conditions=react-server scripts/ci.ts",
     "setup": "npm run db:push && npm run seed",
     "icons": "tsx --conditions=react-server scripts/icons.ts"
@@ -43,5 +45,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

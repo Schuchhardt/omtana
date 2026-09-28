@@ -47,7 +47,9 @@ npm run dev
 La app arranca y se puede recorrer entera aunque Supabase todavía no esté
 conectado: muestra un aviso arriba y estados vacíos con el comando que falta.
 
-Necesitas `ffmpeg` y `ffprobe` en el PATH (`brew install ffmpeg`).
+Necesitas `ffmpeg` y `ffprobe` en el PATH (`brew install ffmpeg`) y **Node 22 o
+más** (`nvm use` lee el `.nvmrc`): con Node 20 la librería de Supabase falla al
+arrancar por falta de WebSocket nativo.
 
 ## Scripts
 
@@ -62,6 +64,8 @@ Necesitas `ffmpeg` y `ffprobe` en el PATH (`brew install ffmpeg`).
 | `npm run curaduria` | Qué le falta al banco para estar parejo. Ver abajo. |
 | `npm run video` | Renderiza las piezas de video: 16:9, 9:16 y 1:1. Ver abajo. |
 | `npm run youtube` | Sube al canal lo que ya está renderizado. Privado salvo que se diga otra cosa. |
+| `npm run semanal` | La semana entera desde tu máquina: elige la sesión larga que más falta, la genera, renderiza 16:9 y 9:16 y, con `--publicar`, la programa en redes. Ver abajo. |
+| `npm run zernio` | Programa en YouTube y redes, por la API de Zernio, los videos ya renderizados. Ver abajo. |
 | `npm run ci` | Las tandas automáticas (`meditaciones`, `videos`) como una sola orden. Es lo que corre GitHub Actions. |
 | `npm run icons` | Rehace los PNG del manifiesto desde el símbolo de la marca. Solo cuando cambia el símbolo. |
 
@@ -336,6 +340,69 @@ que nadie más. Necesita `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET` y
 v3 habilitada y un refresh token sacado una vez, con scope `youtube.upload`,
 desde la cuenta dueña del canal. Sin esos secretos los videos se generan igual y
 se suben a mano desde `out/video/`.
+
+### La semana desde tu máquina
+
+```bash
+npm run semanal -- --seco                 # qué elegiría y qué comandos correría, sin gastar
+npm run semanal                           # genera la larga y renderiza 16:9 + 9:16 en out/video/
+npm run semanal -- --publicar             # además programa la publicación por Zernio
+npm run semanal -- --voz aurora --duracion 20
+npm run semanal -- --solo-render <id>     # salta la generación: renderiza (y publica) esa
+npm run semanal -- --cortos-extra 1       # suma el corto de una sesión vieja sin video
+```
+
+Una corrida por semana, a mano o con `launchd`/`cron` los lunes. El script solo
+**elige** — intención, duración, voz, ejercicio y música — y crea la fila; lo
+demás lo hacen `generate`, `video` y `zernio`, y cada comando se imprime antes
+de correrlo, igual que en `ci.ts`.
+
+La elección sale del informe de curaduría: `weeklyLongJob` toma el primer hueco
+de **15 o 20 minutos** del área más floja del banco (a igual peso, 20 antes que
+15). La voz rota entre las que tienen grabada la respiración para ese hueco e
+idioma, salvo que se fije una "voz de la casa" con `--voz` o con
+`OMTANA_WEEKLY_VOICE`, que reutiliza plantillas y cuesta un tercio en síntesis.
+El ejercicio es el menos usado hasta ahora con esa voz. La música del video
+rota con el número de semana; en la sesión no se guarda, porque el reproductor
+la pone en vivo.
+
+El 16:9 de una sesión larga supera el techo de subida del bucket (50 MB en el
+plan Free), así que queda solo en `out/video/`. `npm run zernio` lo publica
+desde ahí: no hace falta que esté en el bucket.
+
+### Publicar en redes (Zernio)
+
+```bash
+npm run zernio -- --cuentas                        # qué cuentas hay conectadas
+npm run zernio -- --seco                           # qué publicaría, sin tocar nada
+npm run zernio -- <id-de-meditación>               # programa los exports de esa sesión
+npm run zernio -- --cuantos 3 --plataformas youtube,instagram
+npm run zernio -- --sincronizar                    # trae estados y URLs de lo programado
+npm run zernio -- --cancelar <id-de-publicación>   # frena un post que todavía no salió
+```
+
+Opciones: `--formato vertical|youtube|cuadrado`, `--plataformas` (o
+`PUBLISH_PLATFORMS`, por defecto `youtube,instagram`), `--en 48` (horas desde
+ahora), `--programar 2026-10-01T10:00` (hora local en `PUBLISH_TIMEZONE`),
+`--ahora`, `--visibilidad public|private|unlisted` (YouTube), `--desde out/video`.
+
+**Sube público, pero programado 48 horas después.** Esa es la ventana de
+revisión: el post queda en Zernio con hora, `--seco` y `--sincronizar` muestran
+qué va a salir y `--cancelar` lo frena. Se elige público y no privado porque
+Zernio no puede pasar un video de YouTube de privado a público después.
+Cada formato va a las redes que le corresponden — el 16:9 a YouTube; el 9:16 a
+YouTube Shorts, Instagram Reels y, si hay cuenta, TikTok, Facebook Reels y
+Threads; el 1:1 a Instagram y Threads — con el copy adaptado a cada una (Threads
+corta a 500 caracteres, `#Shorts` solo en YouTube, y los recortes enlazan al
+largo cuando ya está publicado). Cada publicación queda en
+`omtana_publications` (migración `0007`), que además impide programar dos veces
+el mismo export en la misma red.
+
+Necesita `ZERNIO_API_KEY` (zernio.com; dos cuentas conectadas son gratis, desde
+la tercera USD 6 al mes cada una). Para publicar en YouTube videos de más de 15
+minutos el canal tiene que estar verificado por teléfono. Instagram exige una
+cuenta Business o Creator ligada a una página de Facebook. Sin la key, los
+videos se generan igual y se suben a mano desde `out/video/`.
 
 ## Automatización
 

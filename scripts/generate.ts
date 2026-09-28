@@ -239,9 +239,14 @@ async function missing(
   const voice = pickVoice(voices, args.values.get("voz"));
   const track = pickMusic(music, args.values.get("musica"));
 
+  // `--duracion` acota a una sola duración; `--idioma` cambia el idioma en que
+  // se escribe, aunque el hueco se haya medido sobre el idioma base del banco.
+  const durations = args.values.has("duracion") ? [pickDuration(args.values.get("duracion"))] : undefined;
+  const locale = args.values.get("idioma");
+
   log.title("Viendo qué le falta al banco");
   const report = await balance();
-  const jobs = generationJobs(report, wanted);
+  const jobs = generationJobs(report, wanted, { durations });
 
   if (jobs.length === 0) {
     log.done("El banco está parejo: no falta ninguna sesión por generar.");
@@ -266,13 +271,13 @@ async function missing(
     log.step(tag);
 
     try {
-      const breathing = await pickBreathing(args, exercises, voice, job.locale, job.duration);
+      const breathing = await pickBreathing(args, exercises, voice, locale ?? job.locale, job.duration);
       const id = await createMeditation({
         intentionId: intention.id,
         title: intention.title,
         intentionText: intention.title,
         context: intention.brief || intention.summary,
-        locale: job.locale,
+        locale: locale ?? job.locale,
         duration: job.duration,
         voiceId: voice.id,
         musicId: track?.id ?? null,

@@ -340,12 +340,19 @@ function findGaps(input: GapInput): Gap[] {
 }
 
 /** Los trabajos de generación que salen del informe, en orden y sin repetir. */
-export function generationJobs(report: BalanceReport, limit: number) {
+export function generationJobs(
+  report: BalanceReport,
+  limit: number,
+  filter: { durations?: number[] } = {},
+) {
   const seen = new Set<string>();
   const jobs: NonNullable<Gap["job"]>[] = [];
 
   for (const gap of report.gaps) {
     if (!gap.job || jobs.length >= limit) continue;
+    // `--duracion` acota la tanda: sin esto una corrida podía llenar el banco
+    // de sesiones de cinco minutos mientras faltaban las largas.
+    if (filter.durations && !filter.durations.includes(gap.job.duration)) continue;
     const key = `${gap.job.intentionSlug}:${gap.job.duration}:${gap.job.locale}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -353,4 +360,39 @@ export function generationJobs(report: BalanceReport, limit: number) {
   }
 
   return jobs;
+}
+
+/**
+ * La sesión larga de la semana.
+ *
+ * Es `generationJobs` con un filtro: solo huecos de quince minutos o más. El
+ * informe ya viene ordenado por lo que más desequilibra al banco, así que el
+ * primer hueco largo es el que toca; a igual peso gana la duración preferida,
+ * porque una de veinte llena el catálogo del plan Pro y una de quince no.
+ *
+ * Devuelve `null` cuando no queda ninguna intención con una duración larga sin
+ * generar para el idioma base. Ahí lo que falta no es una sesión sino banco:
+ * ampliar `durations` de alguna intención o sumar una nueva por curaduría.
+ */
+export function weeklyLongJob(
+  report: BalanceReport,
+  opts: { durations?: number[]; prefer?: number } = {},
+): NonNullable<Gap["job"]> | null {
+  const allowed = opts.durations ?? [15, 20];
+  const prefer = opts.prefer ?? Math.max(...allowed);
+
+  const candidates = report.gaps.filter(
+    (gap): gap is Gap & { job: NonNullable<Gap["job"]> } =>
+      gap.kind === "meditation" && !!gap.job && allowed.includes(gap.job.duration),
+  );
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (a.job.duration === prefer) return -1;
+    if (b.job.duration === prefer) return 1;
+    return b.job.duration - a.job.duration;
+  });
+
+  return candidates[0].job;
 }
