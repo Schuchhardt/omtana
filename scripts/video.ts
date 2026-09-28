@@ -37,7 +37,7 @@ import {
   type FormatId,
   type ThemeName,
 } from "../src/lib/video/brand";
-import { buildTrack, clipAudio, renderVideo } from "../src/lib/video/render";
+import { buildTrack, clipAudio, normalize, renderVideo } from "../src/lib/video/render";
 import { renderBarMask, renderDisc } from "../src/lib/video/disc";
 import {
   speechSpans,
@@ -49,7 +49,7 @@ import {
   type Span,
   type SubtitleCue,
 } from "../src/lib/video/subtitles";
-import { cardCopy, videoCopy } from "../src/lib/video/copy";
+import { cardCopy, SITE, videoCopy } from "../src/lib/video/copy";
 import { breathingSlotSeconds, type BreathingCue, type BreathingStep } from "../src/lib/breathing";
 import type { Intention, Meditation, MeditationSegment, MusicTrack, Voice } from "../src/lib/types";
 
@@ -227,13 +227,21 @@ async function exportOne(id: string, opts: ExportOptions) {
     /* 2 ─ Los subtítulos, medidos sobre la voz sola. */
     const segments = await loadSegments(id, breathing?.seconds ?? 0);
     const spans = await speechSpans(full.voice, full.voiceSeconds);
+    const phrases = segments.flatMap((s) => timePhrases(s, spans, splitPhrases(s.text)));
+    // Lo que se quema lleva el conteo de cada fase ("Inhala · 4"), como la
+    // pantalla; el .srt que va aparte lleva solo la instrucción, porque un
+    // subtítulo por segundo en YouTube es ruido.
     const cues = tidy(
-      [
-        ...(breathing ? breathingCues(breathing, spans) : []),
-        ...segments.flatMap((s) => timePhrases(s, spans, splitPhrases(s.text))),
-      ],
+      [...(breathing ? breathingCues(breathing, spans, meditation.locale, true) : []), ...phrases],
       full.seconds,
     );
+    const srtCues = tidy(
+      [...(breathing ? breathingCues(breathing, spans, meditation.locale, false) : []), ...phrases],
+      full.seconds,
+    );
+    // El bloque de cierre despide de una sesión que un recorte no tuvo: el
+    // pasaje de redes se elige antes de que empiece.
+    const closingAt = segments.find((s) => /cierre|closing|encerramento/i.test(s.label))?.at ?? full.seconds;
 
     /* 3 ─ Una pieza por formato. */
     const logoWidths = new Map<number, string>();
@@ -248,22 +256,37 @@ async function exportOne(id: string, opts: ExportOptions) {
         total: full.seconds,
         breathing,
         cues,
+        closingAt,
         sample: opts.sample,
         asked: opts.piece,
       });
       const cards = clip === null && withCards !== null;
-      const audio = clip
-        ? await clipAudio(work, full.file, clip.from, clip.length, formatId)
+      // Un recorte de verdad (no una muestra) cierra con la marca: dos segundos
+      // y medio de silencio con el wordmark y omtana.com, como el landing.
+      const short = clip !== null && opts.sample === null;
+      let audio = clip
+        ? await clipAudio(work, full.file, clip.from, clip.length, formatId, short ? SHORT_OUTRO : 0)
         : cards
           ? { file: withCards!.file, seconds: withCards!.seconds }
           : { file: full.file, seconds: full.seconds };
+
+      if (opts.sample === null) {
+        audio = {
+          file: await normalize(work, audio.file, formatId, short ? LOUDNESS.short : LOUDNESS.long),
+          seconds: audio.seconds,
+        };
+      }
 
       // El reloj del video contra el de la sesión: los recortes empiezan más
       // adelante, y la pieza larga empieza antes, por la presentación.
       const from = clip ? clip.from : cards ? -CARDS.intro : 0;
       const piece = clip?.piece ?? "completa";
-      const sessionSeconds = cards ? audio.seconds - CARDS.intro - CARDS.outro : audio.seconds;
-      const localCues = shift(cues, from, audio.seconds);
+      const sessionSeconds = cards
+        ? audio.seconds - CARDS.intro - CARDS.outro
+        : short
+          ? audio.seconds - SHORT_OUTRO
+          : audio.seconds;
+      const localCues = shift(cues, from, sessionSeconds);
 
       const assFile = join(work, `subs-${formatId}.ass`);
       await writeFile(
@@ -324,13 +347,18 @@ async function exportOne(id: string, opts: ExportOptions) {
               }),
               logo: await ensureLogo(theme, Math.round(format.width * 0.26)),
             }
-          : null,
+          : short
+            ? await shortOutro(theme, format)
+            : null,
         out,
         draft: opts.sample !== null,
+        // Sin fundido de entrada en los recortes: el primer cuadro es la
+        // miniatura en las redes, y negro no es una miniatura.
+        fades: short ? { in: 0, out: 0.6 } : undefined,
       });
 
       const srt = join(opts.outDir, `${name}.srt`);
-      await writeFile(srt, toSrt(localCues));
+      await writeFile(srt, toSrt(shift(srtCues, from, sessionSeconds)));
 
       const copy = videoCopy({
         title: meditation.title,
@@ -488,7 +516,13 @@ async function loadSegments(id: string, offset: number): Promise<TimedSegment[]>
  * leer es la instrucción. La entrada y el cierre son frases largas, así que
  * pasan por el mismo reparto que el guion.
  */
-function breathingCues(breathing: BreathingPart, spans: Span[]): SubtitleCue[] {
+function breathingCues(
+  breathing: BreathingPart,
+  spans: Span[],
+  locale: string,
+  /** Con conteo: "Inhala · 4", "Inhala · 3"… como la pantalla del reproductor. */
+  counted: boolean,
+): SubtitleCue[] {
   const spoken = breathing.timeline.filter((c) => c.kind !== "count");
   const out: SubtitleCue[] = [];
 
@@ -506,10 +540,66 @@ function breathingCues(breathing: BreathingPart, spans: Span[]): SubtitleCue[] {
       continue;
     }
 
+    // Con conteo, las fases las ponen los pasos de abajo; acá quedan los
+    // comentarios entre ciclos ("vas bien", "la última").
+    if (counted && cue.kind === "phase") continue;
+
     out.push({ start: cue.at, end: Math.min(next, cue.at + 4.5), text: cue.text });
   }
 
+  if (!counted) return out;
+
+  // La misma grilla que mueve el disco: un rótulo por segundo, con la palabra
+  // que de verdad se oye en esa fase (la voz rota entre "inhala", "toma
+  // aire"…) y, si no hubo señal hablada, la etiqueta fija de la pantalla.
+  const labels = PHASE_LABELS[locale] ?? PHASE_LABELS.es;
+  for (const step of breathing.steps) {
+    const fixed = labels[step.kind as keyof typeof labels];
+    if (!fixed) continue;
+
+    const phrase = spoken.find((c) => c.kind === "phase" && Math.abs(c.at - step.at) < 0.4);
+    const label = (phrase?.text ?? fixed).replace(/[.…\s]+$/, "");
+    const n = Math.round(step.seconds);
+
+    for (let k = 0; k < n; k++) {
+      out.push({
+        start: step.at + k,
+        end: Math.min(step.at + k + 1, step.at + step.seconds),
+        text: `${label} · ${n - k}`,
+        fade: false,
+      });
+    }
+  }
+
   return out;
+}
+
+/** Lo que dice la pantalla en cada fase cuando la voz no lo nombró. */
+const PHASE_LABELS: Record<string, { inhale: string; hold: string; exhale: string; empty: string }> = {
+  es: { inhale: "Inhala", hold: "Sostén", exhale: "Suelta", empty: "Espera" },
+  en: { inhale: "Inhale", hold: "Hold", exhale: "Exhale", empty: "Wait" },
+  pt: { inhale: "Inspira", hold: "Segura", exhale: "Solta", empty: "Espera" },
+};
+
+/** Cierre de marca de los recortes, en segundos. */
+const SHORT_OUTRO = 2.5;
+
+/** A cuánto se nivela el audio. Las redes normalizan a −14; el largo va más suave. */
+const LOUDNESS = { short: -14, long: -16 };
+
+/** El cierre corto: solo el wordmark y omtana.com, como termina el landing. */
+async function shortOutro(theme: (typeof THEMES)[ThemeName], format: (typeof FORMATS)[FormatId]) {
+  const width = Math.round(format.width * (format.height > format.width ? 0.58 : 0.4));
+  const logo = await ensureLogo(theme, width);
+  const sharp = (await import("sharp")).default;
+  const { height } = await sharp(logo).metadata();
+  return {
+    intro: 0,
+    outro: SHORT_OUTRO,
+    copy: { title: "", summary: "", sheet: "", breathing: "", site: SITE, closing: "", invite: "" },
+    logo,
+    logoHeight: height ?? Math.round(width * 0.16),
+  };
 }
 
 /**
@@ -561,6 +651,8 @@ function pickClip(input: {
   total: number;
   breathing: BreathingPart | null;
   cues: SubtitleCue[];
+  /** Dónde empieza el bloque de cierre: el pasaje de redes termina antes. */
+  closingAt: number;
   sample: number | null;
   asked: Asked;
 }): Clip | null {
@@ -581,7 +673,7 @@ function pickClip(input: {
   }
 
   return (
-    meditationClip(input.cues, bodyFrom, input.total) ?? {
+    meditationClip(input.cues, bodyFrom, input.total, input.closingAt) ?? {
       // Sin subtítulos con los que alinear — pasa si el guion vino vacío —,
       // se entra pasado el primer tramo y se corta por reloj.
       from: Math.min(bodyFrom + 60, Math.max(bodyFrom, input.total - CLIP.target)),
@@ -636,14 +728,21 @@ function cycleStarts(steps: BreathingStep[]): number[] {
  * más texto: treinta segundos de silencio son perfectos dentro de una sesión y
  * son un video vacío en un teléfono.
  */
-function meditationClip(cues: SubtitleCue[], bodyFrom: number, total: number): Clip | null {
-  const body = cues.filter((c) => c.start >= bodyFrom && c.end <= total - 4);
+function meditationClip(
+  cues: SubtitleCue[],
+  bodyFrom: number,
+  total: number,
+  closingAt: number,
+): Clip | null {
+  // Ni el bloque de cierre, que despide de una sesión que esta pieza no tuvo
+  // — "vamos a ir cerrando" como avance vende justo lo que no se va a ver —,
+  // ni el primer tramo, que es el aterrizaje y no se entiende suelto.
+  const end = Math.min(total - 4, closingAt - 0.5);
+  const body = cues.filter((c) => c.start >= bodyFrom && c.end <= end);
   if (body.length < 2) return null;
 
-  // Ni el primer tramo, que es el aterrizaje y no se entiende suelto, ni el
-  // cierre, que despide de una sesión que esta pieza no tuvo.
-  const from = bodyFrom + (total - bodyFrom) * 0.12;
-  const to = total - (total - bodyFrom) * 0.12;
+  const from = bodyFrom + (end - bodyFrom) * 0.12;
+  const to = end - (end - bodyFrom) * 0.1;
 
   let best: Clip | null = null;
   let bestScore = Infinity;

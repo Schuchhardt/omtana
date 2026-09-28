@@ -12,7 +12,7 @@
  * completo y cuesta una fracción.
  */
 import { join } from "node:path";
-import { run, durationOf, FFMPEG_BIN } from "../generation/audio";
+import { run, runCapture, durationOf, FFMPEG_BIN } from "../generation/audio";
 import { escapeText, ff, type Format, type Layout, type Theme } from "./brand";
 import type { CardCopy } from "./copy";
 import type { DiscTrack } from "./disc";
@@ -136,14 +136,63 @@ export async function clipAudio(
   from: number,
   length: number,
   label: string,
+  /** Silencio al final, donde va el cierre de marca del recorte. */
+  tailSeconds = 0,
 ): Promise<{ file: string; seconds: number }> {
   const out = join(work, `recorte-${label}.wav`);
+  const tail = tailSeconds > 0 ? `,apad=pad_dur=${tailSeconds.toFixed(2)}` : "";
   await run(FFMPEG_BIN, [
     "-y", "-ss", from.toFixed(3), "-t", length.toFixed(3), "-i", file,
-    "-af", `afade=t=in:st=0:d=0.8,afade=t=out:st=${Math.max(0, length - 1.4).toFixed(2)}:d=1.4`,
+    "-af", `afade=t=in:st=0:d=0.8,afade=t=out:st=${Math.max(0, length - 1.4).toFixed(2)}:d=1.4${tail}`,
     out,
   ]);
   return { file: out, seconds: await durationOf(out) };
+}
+
+/**
+ * Deja la pista al volumen que las plataformas esperan.
+ *
+ * YouTube, TikTok e Instagram normalizan a −14 LUFS; una pieza que llega a
+ * −19 suena más baja que cualquier video vecino y la gente sube el volumen
+ * justo antes de que empiece el siguiente. Dos pasadas: la primera mide, la
+ * segunda aplica una ganancia lineal con lo medido — así no comprime, solo
+ * mueve el nivel, que es lo que una meditación necesita.
+ */
+export async function normalize(
+  work: string,
+  file: string,
+  label: string,
+  targetLufs: number,
+  truePeak = -1.5,
+): Promise<string> {
+  const target = `I=${targetLufs}:TP=${truePeak}:LRA=11`;
+  const { stderr } = await runCapture(FFMPEG_BIN, [
+    "-hide_banner", "-nostats", "-i", file,
+    "-af", `loudnorm=${target}:print_format=json`,
+    "-f", "null", "-",
+  ]);
+
+  // El bloque JSON viene al final del stderr, seguido del resumen de ffmpeg.
+  const open = stderr.lastIndexOf("{");
+  const close = stderr.indexOf("}", open);
+  let measured: Record<string, string>;
+  try {
+    measured = JSON.parse(stderr.slice(open, close + 1));
+  } catch {
+    throw new Error(`loudnorm no devolvió la medición de ${file}: ${stderr.slice(-300)}`);
+  }
+
+  const out = join(work, `nivelado-${label}.wav`);
+  await run(FFMPEG_BIN, [
+    "-y", "-i", file,
+    "-af",
+    `loudnorm=${target}:measured_I=${measured.input_i}:measured_TP=${measured.input_tp}:` +
+      `measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}:` +
+      `offset=${measured.target_offset}:linear=true:print_format=summary`,
+    "-ar", "44100",
+    out,
+  ]);
+  return out;
 }
 
 /* ───────────────────────── video ───────────────────────── */
@@ -169,15 +218,19 @@ export interface RenderOptions {
   out: string;
   /** Borrador rápido para mirar el encuadre; se nota en la compresión. */
   draft?: boolean;
+  /** Fundidos de la imagen; sin decir nada, los de la pieza larga. */
+  fades?: { in: number; out: number };
 }
 
 export interface CardOptions {
-  /** Segundos de presentación al principio y de cierre al final. */
+  /** Segundos de presentación al principio y de cierre al final. Con `intro: 0`, solo el cierre corto de los recortes. */
   intro: number;
   outro: number;
   copy: CardCopy;
   /** El wordmark grande del cierre, ya rasterizado. */
   logo: string;
+  /** Alto del wordmark en píxeles, para colgar la URL justo debajo. */
+  logoHeight?: number;
 }
 
 /** Alto de las barras en reposo, en píxeles. */
@@ -246,7 +299,7 @@ export async function renderVideo(opts: RenderOptions): Promise<void> {
     `[media]split[arriba][abajo]`,
     `[abajo]vflip[reflejo]`,
     `[arriba][reflejo]vstack=inputs=2[onda]`,
-    `[bg][onda]overlay=x=(W-w)/2:y=${l.centerY}-h/2:shortest=1${inScene}[conOnda]`,
+    `[bg][onda]overlay=x=(W-w)/2:y=${l.waveY}-h/2:shortest=1${inScene}[conOnda]`,
 
     // Las barras en reposo: una fila finita que se ve siempre, como en el
     // reproductor cuando está en pausa. Sin ella, en los silencios largos del
@@ -254,7 +307,7 @@ export async function renderVideo(opts: RenderOptions): Promise<void> {
     `[rejillaReposo]scale=${l.waveWidth}:${REST_HEIGHT},format=gray[rejillaBase]`,
     `color=c=${ff(theme.wave)}:s=${l.waveWidth}x${REST_HEIGHT}:r=30[colorBase]`,
     `[colorBase][rejillaBase]alphamerge,colorchannelmixer=aa=0.2[reposo]`,
-    `[conOnda][reposo]overlay=x=(W-w)/2:y=${l.centerY}-${Math.round(REST_HEIGHT / 2)}:shortest=1${inScene}[escena]`,
+    `[conOnda][reposo]overlay=x=(W-w)/2:y=${l.waveY}-${Math.round(REST_HEIGHT / 2)}:shortest=1${inScene}[escena]`,
 
     // El disco dura lo que dura la sesión, así que con cartas hay que correrlo
     // hasta donde la sesión empieza; si no, respira durante la presentación y
@@ -301,11 +354,15 @@ export async function renderVideo(opts: RenderOptions): Promise<void> {
     last = "subs";
   }
 
-  filters.push(
-    `[${last}]fade=t=in:st=0:d=${FADE_IN},` +
-      `fade=t=out:st=${Math.max(0, seconds - FADE_OUT).toFixed(2)}:d=${FADE_OUT},` +
-      `format=yuv420p[salida]`,
-  );
+  // Los cortos no funden desde negro: el primer cuadro es la miniatura en
+  // Instagram, TikTok y Shorts, y un cuadro negro ahí es un video que nadie abre.
+  const fadeIn = opts.fades?.in ?? FADE_IN;
+  const fadeOut = opts.fades?.out ?? FADE_OUT;
+  const fades = [
+    fadeIn > 0 ? `fade=t=in:st=0:d=${fadeIn}` : null,
+    fadeOut > 0 ? `fade=t=out:st=${Math.max(0, seconds - fadeOut).toFixed(2)}:d=${fadeOut}` : null,
+  ].filter(Boolean);
+  filters.push(`[${last}]${fades.length ? `${fades.join(",")},` : ""}format=yuv420p[salida]`);
 
   await run(FFMPEG_BIN, [
     "-y",
@@ -372,46 +429,60 @@ function drawCards(
   };
 
   /* ── presentación ── */
-  const introAlpha = fadeAlpha(0.5, from - 0.4);
-  const introOn = `lt(t,${from})`;
+  if (card.intro > 0) {
+    const introAlpha = fadeAlpha(0.5, from - 0.4);
+    const introOn = `lt(t,${from})`;
 
-  line(card.copy.title, f.height * 0.33, l.titleSize * 1.3, theme.text, introAlpha, introOn);
+    line(card.copy.title, f.height * 0.33, l.titleSize * 1.3, theme.text, introAlpha, introOn);
 
-  const summary = wrapCard(card.copy.summary, 54);
-  summary.forEach((text, i) => {
+    const summary = wrapCard(card.copy.summary, 54);
+    summary.forEach((text, i) => {
+      line(
+        text,
+        f.height * (0.44 + i * 0.05),
+        l.metaSize * 1.45,
+        theme.textSoft,
+        introAlpha,
+        introOn,
+      );
+    });
+
+    line(card.copy.sheet, f.height * 0.6, l.metaSize * 1.15, theme.textFaint, introAlpha, introOn);
     line(
-      text,
-      f.height * (0.44 + i * 0.05),
-      l.metaSize * 1.45,
-      theme.textSoft,
+      card.copy.breathing,
+      f.height * 0.645,
+      l.metaSize * 1.15,
+      theme.textFaint,
       introAlpha,
       introOn,
     );
-  });
-
-  line(card.copy.sheet, f.height * 0.6, l.metaSize * 1.15, theme.textFaint, introAlpha, introOn);
-  line(
-    card.copy.breathing,
-    f.height * 0.645,
-    l.metaSize * 1.15,
-    theme.textFaint,
-    introAlpha,
-    introOn,
-  );
+  }
 
   /* ── cierre ── */
-  const outroAlpha = fadeAlpha(to + 0.4, opts.seconds - 0.5);
+  // El cierre corto de los recortes dura dos segundos y medio: entra más
+  // rápido y se queda casi hasta el final, que es donde el video funde.
+  const short = card.intro === 0;
+  const lag = short ? 0.15 : 0.4;
+  const rise = short ? 0.6 : 0.9;
+  const outroAlpha = fadeAlpha(to + lag, opts.seconds - (short ? 0.2 : 0.5), short ? 0.5 : 0.8);
   const outroOn = `gte(t,${to.toFixed(2)})`;
 
   // El wordmark grande, que es lo único que se ve completo del cierre.
   const logo = `logoCierre`;
+  const logoY = Math.round(f.height * (short ? 0.4 : 0.33));
   filters.push(
     `[4:v]format=rgba,colorchannelmixer=aa=0.9,` +
-      `fade=t=in:st=${(to + 0.4).toFixed(2)}:d=0.9:alpha=1[${logo}]`,
-    `[${cursor}][${logo}]overlay=x=(W-w)/2:y=${Math.round(f.height * 0.33)}:` +
-      `enable='${outroOn}'[conLogo]`,
+      `fade=t=in:st=${(to + lag).toFixed(2)}:d=${rise}:alpha=1[${logo}]`,
+    `[${cursor}][${logo}]overlay=x=(W-w)/2:y=${logoY}:enable='${outroOn}'[conLogo]`,
   );
   cursor = "conLogo";
+
+  if (short) {
+    // Solo la URL, colgada del wordmark: como termina el video del landing.
+    const siteY = logoY + (card.logoHeight ?? Math.round(f.height * 0.06)) + Math.round(f.height * 0.03);
+    line(card.copy.site, siteY, l.titleSize * 1.1, theme.textSoft, outroAlpha, outroOn);
+    return cursor;
+  }
 
   line(card.copy.closing, f.height * 0.55, l.metaSize * 1.2, theme.textFaint, outroAlpha, outroOn);
   line(card.copy.site, f.height * 0.595, l.titleSize * 1.15, theme.text, outroAlpha, outroOn);
@@ -421,8 +492,7 @@ function drawCards(
 }
 
 /** Entra en ochenta centésimas, se queda, y se va igual de despacio. */
-function fadeAlpha(start: number, end: number): string {
-  const d = 0.8;
+function fadeAlpha(start: number, end: number, d = 0.8): string {
   return (
     `if(lt(t,${start.toFixed(2)}),0,` +
     `if(lt(t,${(start + d).toFixed(2)}),(t-${start.toFixed(2)})/${d},` +

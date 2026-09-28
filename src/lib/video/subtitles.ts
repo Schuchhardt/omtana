@@ -21,6 +21,12 @@ export interface SubtitleCue {
   start: number;
   end: number;
   text: string;
+  /**
+   * `false` para las señales que cambian cada segundo ("Inhala · 3", "Inhala ·
+   * 2"): sin fundido ni hueco entre una y la siguiente, porque el texto se
+   * queda y solo cambia el número.
+   */
+  fade?: boolean;
 }
 
 /** Un tramo de la sesión, ya ubicado en la línea de tiempo del video. */
@@ -220,7 +226,8 @@ export function tidy(cues: SubtitleCue[], totalSeconds: number): SubtitleCue[] {
   return sorted
     .map((cue, i) => {
       const next = sorted[i + 1];
-      const end = next ? Math.min(cue.end, next.start - 0.08) : Math.min(cue.end, totalSeconds);
+      const gap = cue.fade === false && next?.fade === false ? 0 : 0.08;
+      const end = next ? Math.min(cue.end, next.start - gap) : Math.min(cue.end, totalSeconds);
       return { ...cue, end };
     })
     .filter((cue) => cue.end - cue.start > 0.3 && cue.start < totalSeconds);
@@ -267,8 +274,9 @@ export function toAss(
       .map((line) => line.replace(/\{/g, "(").replace(/\}/g, ")"))
       .join("\\N");
     // El fundido entra rápido y sale lento: aparecer de golpe distrae, quedarse
-    // un segundo de más acompaña.
-    return `Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Omtana,,0,0,0,,{\\fad(400,700)}${text}`;
+    // un segundo de más acompaña. El conteo va sin fundido: parpadearía.
+    const effect = cue.fade === false ? "" : "{\\fad(400,700)}";
+    return `Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Omtana,,0,0,0,,${effect}${text}`;
   });
 
   return `${header}\n${events.join("\n")}\n`;

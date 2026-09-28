@@ -96,9 +96,11 @@ export const FORMAT_IDS = Object.keys(FORMATS) as FormatId[];
  * abajo, que es como se ve bien en un teléfono.
  */
 export interface Layout {
-  /** Centro del disco y de la onda. */
+  /** Centro del disco. */
   centerY: number;
   discRadius: number;
+  /** Centro de la onda, debajo del disco, como en el reproductor. */
+  waveY: number;
   waveWidth: number;
   waveHeight: number;
   /** Cuántas barras tiene la onda. En la app son 72. */
@@ -124,16 +126,20 @@ export function layoutFor(format: Format): Layout {
   const { width: w, height: h } = format;
   const vertical = h > w;
 
-  const centerY = Math.round(h * (vertical ? 0.36 : 0.4));
-  const discRadius = Math.round(Math.min(w, h) * (vertical ? 0.2 : 0.17));
+  const centerY = Math.round(h * (vertical ? 0.36 : 0.37));
+  const discRadius = Math.round(Math.min(w, h) * (vertical ? 0.2 : 0.16));
+  // La onda va debajo del disco, como en el reproductor. Cruzándolo por el
+  // medio tapaba justo lo que respira, que es lo único que se mueve.
+  const waveY = centerY + discRadius + Math.round(h * (vertical ? 0.03 : 0.025));
 
   return {
     centerY,
     discRadius,
+    waveY,
     waveWidth: Math.round(w * (vertical ? 0.86 : 0.66)),
     waveHeight: Math.round(h * (vertical ? 0.075 : 0.13)),
     waveBars: vertical ? 48 : 72,
-    subtitleY: Math.round(h * (vertical ? 0.63 : 0.66)),
+    subtitleY: Math.round(h * (vertical ? 0.63 : 0.7)),
     subtitleSize: Math.round(h * (vertical ? 0.031 : 0.044)),
     subtitleMargin: Math.round(w * (vertical ? 0.09 : 0.17)),
     titleY: Math.round(h * (vertical ? 0.85 : 0.83)),
