@@ -50,7 +50,8 @@ export function planSession(
       label: "Entrada al cuerpo",
       seconds: block,
       wordsPerMinute: WORDS_PER_MINUTE,
-      brief: "Recorrido corporal breve y aterrizaje en el presente.",
+      brief:
+        "Llegada a un lugar concreto elegido para la intención, con su luz y su temperatura; el cuerpo se apoya ahí de los pies a la cabeza.",
     },
     {
       kind: "dynamic",
@@ -58,21 +59,23 @@ export function planSession(
       seconds: dynamic + slack,
       wordsPerMinute: WORDS_PER_MINUTE,
       brief:
-        "El tramo escrito para esta persona: toma su intención y su contexto literal y los trabaja en segunda persona.",
+        "El tramo escrito para esta persona: una escena corta que parte de un detalle literal de su contexto, la lleva del peso que trae a una visión que la llama y le deja una imagen-ancla.",
     },
     {
       kind: "fixed",
       label: "Refuerzo e imágenes",
       seconds: reinforcement,
       wordsPerMinute: WORDS_PER_MINUTE,
-      brief: "Imágenes de refuerzo y repetición de la intención en abstracto.",
+      brief:
+        "El visionado: el mismo lugar de la entrada abierto a la versión más alta de la intención, vista como escena que ya sucede; las preguntas de a una, gratitud por lo que ya circula, imagen-ancla nombrada dos veces.",
     },
     {
       kind: "fixed",
       label: "Cierre",
       seconds: block,
       wordsPerMinute: WORDS_PER_MINUTE,
-      brief: "Vuelta gradual, apertura de ojos y cierre.",
+      brief:
+        "Vuelta gradual con la imagen-ancla guardada, sonidos reales de la habitación, ojos. Si la intención es para dormir, las frases se acortan hasta apagarse, sin vuelta.",
     },
   ];
 

@@ -4,6 +4,7 @@ import { uploadAudio } from "../storage";
 import { planSession, sectionMinutes, wordTarget, type PlannedSection } from "../session-plan";
 import { synthesize } from "./tts";
 import { localized } from "../i18n";
+import { BECKWITH_LENS, HOUSE_STYLE, LANGUAGE } from "./style";
 import type { Intention, Voice } from "../types";
 
 const MODEL = "claude-opus-5";
@@ -14,34 +15,39 @@ const MODEL = "claude-opus-5";
  * La 1 abría con un bloque de respiración escrito; la 2 lo sacó a una pista
  * aparte, así que todas las posiciones se corrieron en uno; la 3 le dio a esa
  * pista dos minutos en vez de uno, y en las sesiones de cinco eso dejó fuera el
- * bloque de refuerzo. Una plantilla vieja reutilizada en una sesión nueva
- * pondría el audio equivocado en cada tramo, y por eso la versión es parte de
- * su identidad.
+ * bloque de refuerzo; la 4 no movió tiempos: cambió lo que dicen los bloques
+ * (escena concreta, visionado al estilo Beckwith, imagen-ancla), y una plantilla
+ * de la 3 mezclada con un tramo nuevo sonaría a dos meditaciones distintas. Una
+ * plantilla vieja reutilizada en una sesión nueva pondría el audio equivocado
+ * en cada tramo, y por eso la versión es parte de su identidad.
  */
-export const PLAN_VERSION = 3;
-
-const LANGUAGE: Record<string, string> = {
-  es: "español neutro",
-  en: "English",
-  pt: "português do Brasil",
-};
+export const PLAN_VERSION = 4;
 
 const SYSTEM = `Escribes los bloques fijos de las meditaciones de Omtana.
 
 Estos bloques se pregeneran una vez y se reutilizan para todas las personas que
 eligen la misma intención, así que no pueden mencionar ningún dato personal ni
-suponer nada del caso de quien escucha.
+suponer nada del caso de quien escucha. Trabajan la intención en general: la
+situación que describe su brief, vivida por cualquiera.
 
-Cómo suenan:
-- Segunda persona, presente, frases cortas. Una idea por frase.
-- Sin solemnidad ni vocabulario New Age. Nada de "energías", "universo", "sanación".
-- Nunca prometes resultados ni das consejo médico, nutricional ni psicológico.
-- Las pausas se marcan con "..." al final de una frase. Úsalas seguido.
+${HOUSE_STYLE}
+
+${BECKWITH_LENS}
+
+Qué hace cada bloque:
+- Entrada al cuerpo: la persona llega a un lugar. No es un recorrido corporal genérico: es un sitio concreto elegido para esta intención (una orilla al amanecer, una cocina con la luz de la mañana, un banco bajo un árbol, un cuarto con la ventana abierta), con su luz, su temperatura y sus sonidos. El cuerpo se va apoyando ahí, de los pies a la cabeza, y cada zona que se nombra se ve tocando algo de la escena. Termina con la persona sentada o acostada dentro del lugar, quieta, lista para que el tramo personalizado la lleve más adentro.
+- Refuerzo e imágenes: el visionado. Retoma el mismo lugar de la entrada, con las mismas palabras, y lo abre: la persona ve la versión más alta de esta intención como escena que ya está sucediendo. Qué ve, qué hace, quién es ahí. Las preguntas de visionado de a una, con silencio después de cada una. Un gesto de gratitud por lo que ya circula. Se cierra con una imagen-ancla nombrada dos veces.
+- Cierre: vuelta gradual. La imagen-ancla se guarda, el cuerpo vuelve a la silla o la cama, entran los sonidos reales de la habitación, los ojos se abren. Sin promesas y sin tarea para mañana. Si la intención es para dormir, no hay vuelta ni ojos: las frases se acortan hasta apagarse.
 
 La sesión abre con un ejercicio de respiración guiado que no escribes tú: va en
 una pista aparte, con su propio reloj. Tu primer bloque entra justo después, con
 la persona ya respirando lento. No repitas instrucciones de respiración contada
-ni anuncies lo que acaba de pasar.`;
+ni anuncies lo que acaba de pasar.
+
+Entre la entrada y el refuerzo va un tramo que se escribe aparte para cada
+persona y que no conoces. Tus bloques tienen que encajar antes y después de ese
+tramo sin anunciarlo: la entrada deja la escena abierta; el refuerzo la retoma
+como si la persona nunca la hubiera dejado.`;
 
 const schema = {
   type: "object" as const,
@@ -92,14 +98,13 @@ async function writeFixedSections(
 Intención de esta plantilla: "${localized(intention, locale, "title")}".
 ${localized(intention, locale, "brief") || localized(intention, locale, "summary")}
 
-Entre la sección de entrada al cuerpo y la de refuerzo va un tramo que se
-escribe aparte para cada persona. Tus bloques tienen que encajar antes y después
-de ese tramo sin repetirlo y sin anunciarlo.
+Elige un solo lugar para esta intención y úsalo en todos los bloques, con las
+mismas palabras cada vez que aparece.
 
 Escribe estas secciones:
 ${brief}
 
-El texto va directo a síntesis de voz: sin encabezados, sin viñetas, sin acotaciones entre paréntesis.`,
+El texto va directo a síntesis de voz: sin encabezados, sin viñetas, sin acotaciones entre paréntesis, sin indicaciones de sonido.`,
       },
     ],
   });

@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { PlannedSection } from "../session-plan";
 import { sectionMinutes, wordTarget } from "../session-plan";
+import { BECKWITH_LENS, HOUSE_STYLE, LANGUAGE } from "./style";
 
 const MODEL = "claude-opus-5";
 
@@ -20,24 +21,22 @@ export interface ScriptResult {
   keywords: string[];
 }
 
-const LANGUAGE: Record<string, string> = {
-  es: "español neutro",
-  en: "English",
-  pt: "português do Brasil",
-};
+const SYSTEM = `Escribes el tramo personalizado de una meditación guiada de Omtana: el que va escrito para una sola persona, con su intención y su contexto literal.
 
-const SYSTEM = `Escribes guiones de meditación guiada para Omtana.
+${HOUSE_STYLE}
 
-Cómo suena una meditación de Omtana:
-- Segunda persona, presente, frases cortas. Una idea por frase.
-- Sin solemnidad ni vocabulario New Age. Nada de "energías", "universo", "sanación".
-- Nunca prometes resultados ni das consejo médico, nutricional ni psicológico.
-- Las pausas se marcan con "..." al final de una frase. Úsalas seguido: el silencio es parte del guion.
-- Trabajas el contexto literal que la persona entregó, sin repetirlo como una lista ni citarlo entre comillas.
-- No saludas ni te despides: el tramo que escribes va intercalado entre bloques que ya existen.
+${BECKWITH_LENS}
+
+Cómo se construye este tramo. Es una historia corta con cuatro momentos, no una lista:
+1. Umbral. Toma un detalle literal del contexto y conviértelo en el punto de partida de una escena: un lugar reconocible, una hora del día, un objeto que la persona tiene cerca. La persona se ve ahí. No repites el contexto como lista ni lo citas entre comillas: lo vuelves lugar.
+2. Camino. Algo se mueve: la persona da un paso, abre una puerta, sube, sale a la luz. Ahí aparece el peso que la trajo, nombrado con claridad y sin dramatizar, y entran, de a una, dos o tres de las preguntas de visionado. Silencio después de cada una.
+3. Claro. La visión se muestra como escena, no como resultado: qué ve, qué hay alrededor, qué hace con las manos, quién es ya dentro de esa imagen. La persona se queda ahí varias frases, mirando.
+4. Regreso con algo en la mano. Una imagen-ancla que se lleva, nombrada dos veces con las mismas palabras, y una frase corta que dice para qué sirve verla de nuevo mañana.
+
+Además:
+- No saludas ni te despides: el tramo va intercalado entre bloques que ya existen. El bloque anterior dejó a la persona apoyada en su cuerpo; el siguiente retoma imágenes de la intención en general. Tu escena tiene que entrar y salir sin costura.
 - La sesión abrió con un ejercicio de respiración guiado aparte. No lo repitas ni pidas conteos de respiración.
-
-Si el contexto sugiere una crisis de salud mental, no la abordes: mantén el tramo en respiración y presencia, neutro y breve.`;
+- Si el contexto sugiere una crisis de salud mental, no la abordes ni la visiones: mantén el tramo en cuerpo y presencia, neutro y breve, sin preguntas de visionado.`;
 
 const outputSchema = {
   type: "object" as const,
@@ -62,7 +61,7 @@ const outputSchema = {
     keywords: {
       type: "array" as const,
       description:
-        "Entre 4 y 7 palabras sueltas que aparecen en pantalla durante la sesión. Una palabra cada una.",
+        "Entre 4 y 7 palabras sueltas que aparecen en pantalla durante la sesión, en el idioma del guion. Una palabra cada una, sacadas de las imágenes que el guion usa (el lugar, la luz, el objeto, la imagen-ancla), no conceptos abstractos.",
       items: { type: "string" as const },
     },
   },
@@ -114,6 +113,8 @@ ${outline}
 
 Escribe solo estas secciones:
 ${brief}
+
+Cuenta la escena completa dentro de estas palabras: umbral, camino, claro y regreso, con la imagen-ancla nombrada dos veces.
 
 El texto va directo a síntesis de voz: sin encabezados, sin viñetas, sin acotaciones entre paréntesis, sin indicaciones de sonido.`,
       },
