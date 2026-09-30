@@ -9,10 +9,11 @@ import { paymentsEnabled } from "@/lib/payments";
 import { formatDate } from "@/lib/format";
 import { PLAN } from "@/lib/config";
 import { getLang } from "@/lib/lang";
+import { PRIVATE_ROBOTS } from "@/lib/seo";
 import { copy, fill, ledgerReason, plural } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.plans };
+  return { title: copy(await getLang()).meta.titles.plans, robots: PRIVATE_ROBOTS };
 }
 
 export default async function PlanesPage({

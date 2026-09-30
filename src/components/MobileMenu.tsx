@@ -16,12 +16,16 @@ import type { Copy, UiLang } from "@/lib/i18n";
  */
 export function MobileMenu({
   items,
+  signInHref,
+  signUpHref,
   signedIn,
   lang,
   labels,
   switchLabel,
 }: {
   items: NavItem[];
+  signInHref: string;
+  signUpHref: string;
   signedIn: boolean;
   lang: UiLang;
   labels: Copy["nav"];
@@ -122,12 +126,12 @@ export function MobileMenu({
             ) : (
               <div className="flex flex-col gap-2 pb-1">
                 <Link
-                  href="/acceso"
+                  href={signInHref}
                   className="flex min-h-[48px] items-center rounded-card px-3 text-[17px] text-ink-soft"
                 >
                   {labels.signIn}
                 </Link>
-                <Link href="/acceso?modo=crear" className="om-btn om-btn-solid w-full py-[14px]">
+                <Link href={signUpHref} className="om-btn om-btn-solid w-full py-[14px]">
                   {labels.signUp}
                 </Link>
               </div>

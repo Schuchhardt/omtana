@@ -21,7 +21,8 @@
     "semanal": "tsx --conditions=react-server scripts/semanal.ts",
     "ci": "tsx --conditions=react-server scripts/ci.ts",
     "setup": "npm run db:push && npm run seed",
-    "icons": "tsx --conditions=react-server scripts/icons.ts"
+    "icons": "tsx --conditions=react-server scripts/icons.ts",
+    "og": "tsx scripts/og.tsx"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

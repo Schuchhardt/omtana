@@ -28,10 +28,20 @@ export const es = {
   },
 
   meta: {
-    title: "Omtana — Meditaciones generadas",
+    title: "Omtana — Meditaciones guiadas personalizadas con IA",
     description:
-      "Omtana arma la meditación alrededor de tu caso: guion, voz y música. Cada sesión abre con respiración.",
+      "Crea meditaciones guiadas a tu medida: escribes tu intención y Omtana arma el guion, la voz y la música en menos de un minuto. En español, inglés y portugués. Empieza gratis.",
     ogDescription: "No busques entre las meditaciones que ya existen. Crea la tuya.",
+    /** Descripción de cada página pública, para buscadores y tarjetas de redes. */
+    descriptions: {
+      voices:
+        "Escucha las voces de Omtana y elige quién conduce tu meditación guiada. Voces en español, inglés y portugués, cada una con su tono.",
+      catalog:
+        "Meditaciones guiadas gratis y sin cuenta: sesiones de 5 a 20 minutos en español, inglés y portugués, del equipo de Omtana y de su comunidad.",
+      terms: "Términos y condiciones de Omtana y cómo tratamos tus datos.",
+      access:
+        "Entra a Omtana o crea tu cuenta gratis para generar meditaciones guiadas a tu medida.",
+    },
     titles: {
       access: "Acceso",
       catalog: "Catálogo público",
@@ -44,6 +54,12 @@ export const es = {
       terms: "Términos y condiciones",
       player: "Reproductor",
     },
+  },
+
+  /** Imagen para compartir (`npm run og`): el titular es `hero.title`. */
+  og: {
+    eyebrow: "Meditaciones guiadas a tu medida",
+    alt: "Omtana: no busques entre las meditaciones que ya existen. Crea la tuya.",
   },
 
   /* ───────────────────────────── landing ───────────────────────────── */

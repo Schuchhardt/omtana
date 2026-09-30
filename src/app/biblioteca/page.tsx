@@ -6,10 +6,11 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listUserMeditations, listVoices } from "@/lib/queries";
 import { getLang } from "@/lib/lang";
+import { PRIVATE_ROBOTS } from "@/lib/seo";
 import { copy, plural } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.library };
+  return { title: copy(await getLang()).meta.titles.library, robots: PRIVATE_ROBOTS };
 }
 
 export default async function BibliotecaPage() {

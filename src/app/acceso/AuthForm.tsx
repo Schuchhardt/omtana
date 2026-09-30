@@ -3,11 +3,21 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { login, signup, type AuthState } from "./actions";
-import type { Copy } from "@/lib/i18n";
+import type { Copy, UiLang } from "@/lib/i18n";
+// Desde `routes` y no desde el índice: así el cliente no carga los diccionarios.
+import { localePath } from "@/lib/i18n/routes";
 
 const EMPTY: AuthState = {};
 
-export function AuthForm({ mode, t }: { mode: "crear" | "entrar"; t: Copy["access"] }) {
+export function AuthForm({
+  mode,
+  t,
+  lang,
+}: {
+  mode: "crear" | "entrar";
+  t: Copy["access"];
+  lang: UiLang;
+}) {
   const isSignup = mode === "crear";
   const [state, action, pending] = useActionState(isSignup ? signup : login, EMPTY);
 
@@ -15,14 +25,14 @@ export function AuthForm({ mode, t }: { mode: "crear" | "entrar"; t: Copy["acces
     <div>
       <div className="mb-[34px] flex w-fit gap-1 rounded-full bg-line-hair p-1">
         <Link
-          href="/acceso"
+          href={localePath(lang, "/acceso")}
           data-active={!isSignup}
           className="om-pill border-transparent data-[active=true]:border-ink"
         >
           {t.tabSignIn}
         </Link>
         <Link
-          href="/acceso?modo=crear"
+          href={localePath(lang, "/acceso?modo=crear")}
           data-active={isSignup}
           className="om-pill border-transparent data-[active=true]:border-ink"
         >
@@ -96,7 +106,7 @@ export function AuthForm({ mode, t }: { mode: "crear" | "entrar"; t: Copy["acces
             />
             <span>
               {t.termsBefore}
-              <Link href="/terminos">{t.termsLink}</Link>
+              <Link href={localePath(lang, "/terminos")}>{t.termsLink}</Link>
               {t.termsAfter}
             </span>
           </label>

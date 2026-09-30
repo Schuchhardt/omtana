@@ -5,10 +5,16 @@ import { AuthForm } from "./AuthForm";
 import { BreathCircle } from "@/components/BreathCircle";
 import { currentUser } from "@/lib/auth";
 import { getLang } from "@/lib/lang";
+import { publicMetadata } from "@/lib/seo";
 import { copy } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.access };
+  const lang = await getLang();
+  const t = copy(lang).meta;
+  return publicMetadata(lang, "/acceso", {
+    title: t.titles.access,
+    description: t.descriptions.access,
+  });
 }
 
 export default async function AccesoPage({
@@ -25,7 +31,7 @@ export default async function AccesoPage({
 
   return (
     <main className="om-shell grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-center gap-16 pb-24 pt-16">
-      <AuthForm mode={mode} t={t} />
+      <AuthForm mode={mode} t={t} lang={lang} />
 
       <div className="w-full max-w-[460px] justify-self-center">
         <BreathCircle>

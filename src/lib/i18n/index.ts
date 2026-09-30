@@ -16,10 +16,11 @@
 import { es } from "./es";
 import { en } from "./en";
 
+export { LANG_COOKIE, localePath } from "./routes";
+
 export const UI_LANGS = ["es", "en"] as const;
 export type UiLang = (typeof UI_LANGS)[number];
 
-export const LANG_COOKIE = "omtana_lang";
 /** Un año: la elección de idioma no caduca con la sesión. */
 export const LANG_COOKIE_MAX_AGE = 31_536_000;
 

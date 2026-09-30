@@ -12,10 +12,11 @@ import {
 } from "@/lib/queries";
 import { paymentsEnabled } from "@/lib/payments";
 import { getLang } from "@/lib/lang";
+import { PRIVATE_ROBOTS } from "@/lib/seo";
 import { copy } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.customize };
+  return { title: copy(await getLang()).meta.titles.customize, robots: PRIVATE_ROBOTS };
 }
 
 export default async function PersonalizarPage({

@@ -6,6 +6,7 @@ import { SetupNotice } from "@/components/SetupNotice";
 import { ServiceWorkerBridge } from "@/components/ServiceWorkerBridge";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
+import { OG_LOCALE, SITE_URL, ogImage } from "@/lib/seo";
 
 const jost = Jost({
   subsets: ["latin"],
@@ -15,15 +16,17 @@ const jost = Jost({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const t = copy(await getLang()).meta;
+  const lang = await getLang();
+  const t = copy(lang).meta;
 
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+    metadataBase: new URL(SITE_URL),
     title: {
       default: t.title,
       template: "%s · Omtana",
     },
     description: t.description,
+    applicationName: "Omtana",
     icons: {
       icon: "/brand/omtana-symbol-black.svg",
       apple: "/icons/apple-touch-icon.png",
@@ -38,10 +41,22 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "Omtana",
       statusBarStyle: "default",
     },
+    // Las páginas públicas reemplazan esto con su URL y su hreflang (ver
+    // `publicMetadata`); esto queda de respaldo para el resto.
     openGraph: {
       title: t.title,
       description: t.ogDescription,
+      siteName: "Omtana",
       type: "website",
+      locale: OG_LOCALE[lang],
+      images: [ogImage(lang)],
+    },
+    twitter: { card: "summary_large_image", images: [ogImage(lang)] },
+    /** Fragmentos largos y vista previa grande en los resultados de Google. */
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large" },
     },
   };
 }

@@ -5,11 +5,12 @@ import { MobileMenu } from "./MobileMenu";
 import { LangSwitch } from "./LangSwitch";
 import { currentUser } from "@/lib/auth";
 import { getLang } from "@/lib/lang";
-import { copy } from "@/lib/i18n";
+import { copy, localePath } from "@/lib/i18n";
 
 export async function SiteHeader() {
   const [user, lang] = await Promise.all([currentUser(), getLang()]);
   const t = copy(lang);
+  const to = (href: string) => localePath(lang, href);
 
   // Planes no está acá a propósito: el nav es para lo que se usa a diario y la
   // entrada a planes vive en el pie (y en el perfil, para quien la busca).
@@ -17,20 +18,20 @@ export async function SiteHeader() {
     ? [
         { href: "/home", label: t.nav.home },
         { href: "/personalizar", label: t.nav.customize },
-        { href: "/voces", label: t.nav.voices },
+        { href: to("/voces"), label: t.nav.voices },
         { href: "/biblioteca", label: t.nav.library },
         { href: "/perfil", label: t.nav.profile },
       ]
     : [
-        { href: "/", label: t.nav.howItWorks },
-        { href: "/voces", label: t.nav.voices },
+        { href: to("/"), label: t.nav.howItWorks },
+        { href: to("/voces"), label: t.nav.voices },
       ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-sand/93 backdrop-blur-[12px]">
       {/* Altura fija: el reproductor la descuenta para ocupar la pantalla justa. */}
       <div className="mx-auto flex h-[var(--om-header-h)] max-w-[1180px] items-center gap-5 px-6">
-        <Logo href={user ? "/home" : "/"} />
+        <Logo href={user ? "/home" : to("/")} />
 
         <NavTabs items={items} className="hidden lg:flex" />
 
@@ -48,17 +49,20 @@ export async function SiteHeader() {
             </form>
           ) : (
             <div className="flex items-center gap-1 border-l border-line pl-[14px]">
-              <Link href="/acceso" className="px-[10px] py-1.5 text-[14px] text-muted-soft hover:text-ink">
+              <Link href={to("/acceso")} className="px-[10px] py-1.5 text-[14px] text-muted-soft hover:text-ink">
                 {t.nav.signIn}
               </Link>
-              <Link href="/acceso?modo=crear" className="om-btn om-btn-solid om-btn-sm">
+              <Link href={to("/acceso?modo=crear")} className="om-btn om-btn-solid om-btn-sm">
                 {t.nav.signUp}
               </Link>
             </div>
           )}
         </div>
 
-        <MobileMenu items={items} signedIn={!!user} lang={lang} labels={t.nav} switchLabel={t.langSwitchLabel} />
+        <MobileMenu
+          items={items}
+          signInHref={to("/acceso")}
+          signUpHref={to("/acceso?modo=crear")} signedIn={!!user} lang={lang} labels={t.nav} switchLabel={t.langSwitchLabel} />
       </div>
     </header>
   );

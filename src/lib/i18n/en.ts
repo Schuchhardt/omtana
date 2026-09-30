@@ -30,10 +30,18 @@ export const en: Copy = {
   },
 
   meta: {
-    title: "Omtana — Generated meditations",
+    title: "Omtana — Personalized AI guided meditations",
     description:
-      "Omtana builds the meditation around your case: script, voice and music. Every session opens with breathing.",
+      "Create guided meditations made for you: write your intention and Omtana builds the script, voice and music in under a minute. In English, Spanish and Portuguese. Start free.",
     ogDescription: "Don't go looking through meditations that already exist. Create your own.",
+    descriptions: {
+      voices:
+        "Listen to Omtana's voices and choose who guides your meditation. Voices in English, Spanish and Portuguese, each with its own tone.",
+      catalog:
+        "Free guided meditations you can play without an account: 5 to 20 minute sessions in English, Spanish and Portuguese, from the Omtana team and its community.",
+      terms: "Omtana's terms and conditions and how we handle your data.",
+      access: "Sign in to Omtana or create a free account to generate guided meditations made for you.",
+    },
     titles: {
       access: "Sign in",
       catalog: "Public catalogue",
@@ -46,6 +54,11 @@ export const en: Copy = {
       terms: "Terms and conditions",
       player: "Player",
     },
+  },
+
+  og: {
+    eyebrow: "Guided meditations made for you",
+    alt: "Omtana: don't go looking through meditations that already exist. Create your own.",
   },
 
   /* ───────────────────────────── landing ───────────────────────────── */
