@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/SiteFooter";
 import { getLang } from "@/lib/lang";
+import { publicMetadata } from "@/lib/seo";
 import { copy, fill } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.terms };
+  const lang = await getLang();
+  const t = copy(lang).meta;
+  return publicMetadata(lang, "/terminos", {
+    title: t.titles.terms,
+    description: t.descriptions.terms,
+  });
 }
 
 export default async function TerminosPage() {

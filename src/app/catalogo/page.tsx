@@ -6,10 +6,16 @@ import { listCatalog, listVoices } from "@/lib/queries";
 import { formatDuration, plays as playsLabel } from "@/lib/format";
 import { LOCALES } from "@/lib/config";
 import { getLang } from "@/lib/lang";
-import { copy, fill, plural } from "@/lib/i18n";
+import { publicMetadata } from "@/lib/seo";
+import { copy, fill, localePath, plural } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.catalog };
+  const lang = await getLang();
+  const t = copy(lang).meta;
+  return publicMetadata(lang, "/catalogo", {
+    title: t.titles.catalog,
+    description: t.descriptions.catalog,
+  });
 }
 
 const ALL = "todas";
@@ -59,7 +65,7 @@ export default async function CatalogoPage({
           {filters.map((f) => (
             <Link
               key={f.code}
-              href={`/catalogo?idioma=${f.code}`}
+              href={localePath(lang, `/catalogo?idioma=${f.code}`)}
               data-active={selected === f.code}
               aria-current={selected === f.code ? "page" : undefined}
               className="om-pill inline-flex items-center"
@@ -79,7 +85,7 @@ export default async function CatalogoPage({
           <p className="om-card px-6 py-8 text-[16px] leading-[1.6] text-muted">
             {explicit ? (
               <>
-                {t.emptyFilter} <Link href={`/catalogo?idioma=${ALL}`}>{t.seeAll}</Link>.
+                {t.emptyFilter} <Link href={localePath(lang, `/catalogo?idioma=${ALL}`)}>{t.seeAll}</Link>.
               </>
             ) : (
               <>
@@ -113,7 +119,7 @@ export default async function CatalogoPage({
 
         <p className="mt-10 text-[15px] text-muted">
           {t.ctaBefore}
-          <Link href="/acceso?modo=crear">{t.ctaLink}</Link>
+          <Link href={localePath(lang, "/acceso?modo=crear")}>{t.ctaLink}</Link>
           {t.ctaAfter}
         </p>
       </div>

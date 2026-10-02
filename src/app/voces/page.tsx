@@ -6,10 +6,16 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listVoices } from "@/lib/queries";
 import { getLang } from "@/lib/lang";
+import { publicMetadata } from "@/lib/seo";
 import { copy } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.voices };
+  const lang = await getLang();
+  const t = copy(lang).meta;
+  return publicMetadata(lang, "/voces", {
+    title: t.titles.voices,
+    description: t.descriptions.voices,
+  });
 }
 
 export default async function VocesPage({

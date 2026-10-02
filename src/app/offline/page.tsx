@@ -2,6 +2,10 @@ import Image from "next/image";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 import { RetryButton } from "./RetryButton";
+import type { Metadata } from "next";
+import { PRIVATE_ROBOTS } from "@/lib/seo";
+
+export const metadata: Metadata = { robots: PRIVATE_ROBOTS };
 
 /**
  * Lo que se ve cuando una navegación no encuentra red.

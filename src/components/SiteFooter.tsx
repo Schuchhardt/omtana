@@ -2,29 +2,31 @@ import Image from "next/image";
 import Link from "next/link";
 import { paymentsEnabled } from "@/lib/payments";
 import { getLang } from "@/lib/lang";
-import { copy } from "@/lib/i18n";
+import { copy, localePath } from "@/lib/i18n";
 import { VERSION_LABEL } from "@/lib/version";
 
 export async function SiteFooter() {
-  const t = copy(await getLang()).footer;
+  const lang = await getLang();
+  const t = copy(lang).footer;
+  const to = (href: string) => localePath(lang, href);
 
   const columns = [
     {
       title: t.columns.product,
       links: [
-        { label: t.links.howItWorks, href: "/" },
-        { label: t.links.voices, href: "/voces" },
+        { label: t.links.howItWorks, href: to("/") },
+        { label: t.links.voices, href: to("/voces") },
         // Sin pagos configurados no hay plan que elegir: la entrada desaparece
         // en vez de llevar a una página que no ofrece nada.
         ...(paymentsEnabled() ? [{ label: t.links.plans, href: "/planes" }] : []),
-        { label: t.links.youtube, href: "/#youtube" },
+        { label: t.links.youtube, href: to("/#youtube") },
       ],
     },
     {
       title: t.columns.account,
       links: [
-        { label: t.links.signIn, href: "/acceso" },
-        { label: t.links.signUp, href: "/acceso?modo=crear" },
+        { label: t.links.signIn, href: to("/acceso") },
+        { label: t.links.signUp, href: to("/acceso?modo=crear") },
         { label: t.links.library, href: "/biblioteca" },
         { label: t.links.profile, href: "/perfil" },
       ],
@@ -32,8 +34,8 @@ export async function SiteFooter() {
     {
       title: t.columns.legal,
       links: [
-        { label: t.terms, href: "/terminos" },
-        { label: t.privacy, href: "/terminos#datos" },
+        { label: t.terms, href: to("/terminos") },
+        { label: t.privacy, href: to("/terminos#datos") },
         { label: "hola@omtana.com", href: "mailto:hola@omtana.com" },
       ],
     },
@@ -71,8 +73,8 @@ export async function SiteFooter() {
 
       <div className="om-shell flex flex-wrap items-center gap-5 pb-12 text-[14px] text-faint">
         <span>{t.copyright}</span>
-        <Link href="/terminos" className="text-faint hover:text-ink">{t.terms}</Link>
-        <Link href="/terminos#datos" className="text-faint hover:text-ink">{t.privacy}</Link>
+        <Link href={to("/terminos")} className="text-faint hover:text-ink">{t.terms}</Link>
+        <Link href={to("/terminos#datos")} className="text-faint hover:text-ink">{t.privacy}</Link>
         <span className="ml-auto">{t.languages}</span>
         {/* Versión del build. Sirve para saber, mirando el pie, si lo que está
             corriendo en el navegador es el último deploy. */}

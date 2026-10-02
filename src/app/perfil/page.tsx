@@ -8,10 +8,11 @@ import { listVoices, userStats } from "@/lib/queries";
 import { paymentsEnabled } from "@/lib/payments";
 import { formatLongDate } from "@/lib/format";
 import { getLang } from "@/lib/lang";
+import { PRIVATE_ROBOTS } from "@/lib/seo";
 import { copy, fill } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.profile };
+  return { title: copy(await getLang()).meta.titles.profile, robots: PRIVATE_ROBOTS };
 }
 
 export default async function PerfilPage() {

@@ -23,11 +23,14 @@ export function Faq({ items }: { items: FaqItem[] }) {
             <span className="mr-auto text-[17px]">{f.q}</span>
             <span className="flex-none text-[18px] text-faint">{open === i ? "−" : "+"}</span>
           </button>
-          {open === i && (
-            <div className="max-w-[56ch] pb-[22px] pr-10 text-[16px] leading-[1.65] text-muted">
-              {f.a}
-            </div>
-          )}
+          {/* Las respuestas cerradas siguen en el HTML: buscadores y motores de
+              respuesta las leen aunque la persona no haya abierto la pregunta. */}
+          <div
+            hidden={open !== i}
+            className="max-w-[56ch] pb-[22px] pr-10 text-[16px] leading-[1.65] text-muted"
+          >
+            {f.a}
+          </div>
         </div>
       ))}
     </div>

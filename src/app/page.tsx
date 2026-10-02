@@ -9,11 +9,21 @@ import { currentUser } from "@/lib/auth";
 import { planOutline, sectionMinutes } from "@/lib/session-plan";
 import { breathingSlotSeconds } from "@/lib/breathing";
 import { getLang } from "@/lib/lang";
-import { copy, sectionLabel } from "@/lib/i18n";
+import { copy, localePath, sectionLabel } from "@/lib/i18n";
+import { publicMetadata } from "@/lib/seo";
+import { LandingJsonLd } from "@/components/LandingJsonLd";
+import type { Metadata } from "next";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const lang = await getLang();
+  const t = copy(lang).meta;
+  return publicMetadata(lang, "/", { title: { absolute: t.title }, description: t.description });
+}
 
 export default async function LandingPage() {
   const [user, lang] = await Promise.all([currentUser(), getLang()]);
   const t = copy(lang);
+  const to = (href: string) => localePath(lang, href);
   // La portada muestra el reparto con una respiración genérica: el ejercicio
   // concreto se elige al personalizar, pero el hueco que ocupa es este.
   const anatomy = planOutline(15, {
@@ -23,6 +33,7 @@ export default async function LandingPage() {
 
   return (
     <main>
+      <LandingJsonLd lang={lang} />
       <div className="om-shell">
         {/* Hero */}
         <section className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-center gap-14 pb-[76px] pt-[92px]">
@@ -31,10 +42,10 @@ export default async function LandingPage() {
             <h1 className="mb-6 text-[clamp(38px,5vw,62px)] leading-[1.06]">{t.hero.title}</h1>
             <p className="mb-9 max-w-[46ch] text-[19px] leading-[1.6] text-muted">{t.hero.body}</p>
             <div className="flex flex-wrap items-center gap-3">
-              <Link href={user ? "/home" : "/acceso?modo=crear"} className="om-btn om-btn-solid">
+              <Link href={user ? "/home" : to("/acceso?modo=crear")} className="om-btn om-btn-solid">
                 {user ? t.hero.ctaHome : t.hero.ctaSignUp}
               </Link>
-              <Link href="/catalogo" className="om-btn om-btn-ghost">
+              <Link href={to("/catalogo")} className="om-btn om-btn-ghost">
                 {t.hero.ctaListen}
               </Link>
             </div>
@@ -152,10 +163,10 @@ export default async function LandingPage() {
             {t.closing.body}
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href={user ? "/home" : "/acceso?modo=crear"} className="om-btn om-btn-solid">
+            <Link href={user ? "/home" : to("/acceso?modo=crear")} className="om-btn om-btn-solid">
               {user ? t.hero.ctaHome : t.hero.ctaSignUp}
             </Link>
-            <Link href="/catalogo" className="om-btn om-btn-ghost">
+            <Link href={to("/catalogo")} className="om-btn om-btn-ghost">
               {t.hero.ctaListen}
             </Link>
           </div>

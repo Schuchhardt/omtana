@@ -8,9 +8,13 @@ export interface NavItem {
   label: string;
 }
 
-/** La misma regla de pestaña activa para el nav de escritorio y el de móvil. */
+/**
+ * La misma regla de pestaña activa para el nav de escritorio y el de móvil. La
+ * portada (`/` o `/en`) solo cuenta como activa exacta: si no, `/en` quedaría
+ * marcada en todas las páginas en inglés.
+ */
 export function isActive(pathname: string, href: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return href === "/" || href === "/en" ? pathname === href : pathname.startsWith(href);
 }
 
 export function NavTabs({ items, className = "" }: { items: NavItem[]; className?: string }) {

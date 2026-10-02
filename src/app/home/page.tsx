@@ -11,10 +11,11 @@ import { paymentsEnabled } from "@/lib/payments";
 import { greeting, formatDuration, formatDate } from "@/lib/format";
 import { PLAN } from "@/lib/config";
 import { getLang } from "@/lib/lang";
+import { PRIVATE_ROBOTS } from "@/lib/seo";
 import { areaLabel, copy, fill, localized } from "@/lib/i18n";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: copy(await getLang()).meta.titles.home };
+  return { title: copy(await getLang()).meta.titles.home, robots: PRIVATE_ROBOTS };
 }
 
 export default async function HomePage() {
