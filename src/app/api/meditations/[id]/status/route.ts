@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/supabase";
 import { currentUser } from "@/lib/auth";
 import { signedUrl } from "@/lib/storage";
-import { paymentsEnabled } from "@/lib/payments";
+import { refundFailedGeneration } from "@/lib/meditations/refund";
 import { getLang } from "@/lib/lang";
 import { copy, type Copy } from "@/lib/i18n";
 import { classifyGenerationError } from "@/lib/generation/errors";
@@ -66,29 +66,11 @@ export async function GET(
     }
   }
 
-  // Una generación fallida devuelve lo cobrado, una sola vez. Sin pagos no se
-  // cobró nada al encolar, así que tampoco hay nada que devolver.
-  if (meditation.status === "failed" && mine && user && paymentsEnabled()) {
-    const { data: refunded } = await db()
-      .from("omtana_credit_ledger")
-      .select("id")
-      .eq("meditation_id", id)
-      .gt("delta", 0)
-      .maybeSingle();
-
-    if (!refunded) {
-      await db().from("omtana_credit_ledger").insert({
-        user_id: user.id,
-        delta: 1,
-        reason: "Devolución por generación fallida",
-        reason_key: "refund_failed",
-        meditation_id: id,
-      });
-      await db()
-        .from("omtana_users")
-        .update({ credits: user.credits + 1 })
-        .eq("id", user.id);
-    }
+  // Una generación fallida devuelve lo cobrado, una sola vez (lib/meditations/
+  // refund.ts, que comparte con el MCP). Sin pagos no se cobró nada al
+  // encolar, así que tampoco hay nada que devolver.
+  if (meditation.status === "failed" && mine) {
+    await refundFailedGeneration(id);
   }
 
   return NextResponse.json({

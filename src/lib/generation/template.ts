@@ -5,9 +5,10 @@ import { planSession, sectionMinutes, wordTarget, type PlannedSection } from "..
 import { synthesize } from "./tts";
 import { localized } from "../i18n";
 import { BECKWITH_LENS, HOUSE_STYLE, LANGUAGE } from "./style";
+import { recordAnthropicUsage, withTrace } from "../telemetry";
 import type { Intention, Voice } from "../types";
 
-const MODEL = "claude-opus-5";
+export const MODEL = "claude-opus-5";
 
 /**
  * Versión del reparto de secciones.
@@ -84,6 +85,7 @@ async function writeFixedSections(
     )
     .join("\n");
 
+  const startedAt = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 12000,
@@ -107,6 +109,14 @@ ${brief}
 El texto va directo a síntesis de voz: sin encabezados, sin viñetas, sin acotaciones entre paréntesis, sin indicaciones de sonido.`,
       },
     ],
+  });
+
+  await recordAnthropicUsage({
+    operation: "plantilla",
+    requestedModel: MODEL,
+    response,
+    startedAt,
+    metadata: { intention: intention.slug, locale },
   });
 
   if (response.stop_reason === "refusal") {
@@ -198,6 +208,28 @@ export async function ensureTemplate(
 
   if (error || !template) throw new Error(`No se pudo crear la plantilla: ${error?.message}`);
 
+  // La voz de la plantilla queda colgada de la plantilla (la pagan todas las
+  // sesiones que la reutilicen) y también de la meditación que la estrenó.
+  const rows = await withTrace({ templateId: template.id, operation: "plantilla:voz" }, () =>
+    synthesizeTemplate(plan, texts, template.id, voice, opts),
+  );
+
+  const { error: sectionsError } = await db()
+    .from("omtana_template_sections")
+    .insert(rows.map((r) => ({ ...r, template_id: template.id })));
+
+  if (sectionsError) throw new Error(`No se guardaron las secciones: ${sectionsError.message}`);
+
+  return { templateId: template.id, sections: rows };
+}
+
+async function synthesizeTemplate(
+  plan: PlannedSection[],
+  texts: Record<number, string>,
+  templateId: string,
+  voice: Voice,
+  opts: { onStep?: (step: string) => void },
+): Promise<TemplateSectionRow[]> {
   const rows: TemplateSectionRow[] = [];
   for (const section of plan) {
     let audioPath: string | null = null;
@@ -212,7 +244,7 @@ export async function ensureTemplate(
         settings: voice.provider_settings,
       });
       audioPath = await uploadAudio(
-        `templates/${template.id}/${section.position}-${section.label.toLowerCase().replace(/[^a-z0-9]+/gi, "-")}.mp3`,
+        `templates/${templateId}/${section.position}-${section.label.toLowerCase().replace(/[^a-z0-9]+/gi, "-")}.mp3`,
         mp3,
       );
     }
@@ -227,12 +259,5 @@ export async function ensureTemplate(
       brief: section.brief,
     });
   }
-
-  const { error: sectionsError } = await db()
-    .from("omtana_template_sections")
-    .insert(rows.map((r) => ({ ...r, template_id: template.id })));
-
-  if (sectionsError) throw new Error(`No se guardaron las secciones: ${sectionsError.message}`);
-
-  return { templateId: template.id, sections: rows };
+  return rows;
 }

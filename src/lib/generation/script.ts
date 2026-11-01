@@ -3,8 +3,9 @@ import type { PlannedSection } from "../session-plan";
 import { sectionMinutes, wordTarget } from "../session-plan";
 import { BECKWITH_LENS, HOUSE_STYLE, LANGUAGE } from "./style";
 import { SCRIPT_REFUSED } from "./errors";
+import { recordAnthropicUsage } from "../telemetry";
 
-const MODEL = "claude-opus-5";
+export const MODEL = "claude-opus-5";
 
 export interface ScriptRequest {
   intention: string;
@@ -88,6 +89,7 @@ export async function writeScript(req: ScriptRequest): Promise<ScriptResult> {
     )
     .join("\n");
 
+  const startedAt = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 8000,
@@ -121,6 +123,9 @@ El texto va directo a síntesis de voz: sin encabezados, sin viñetas, sin acota
       },
     ],
   });
+
+  // Se registra antes de mirar el resultado: una negativa también se cobra.
+  await recordAnthropicUsage({ operation: "guion", requestedModel: MODEL, response, startedAt });
 
   if (response.stop_reason === "refusal") {
     // Texto estable: es el único error que se le muestra a la persona (errors.ts).

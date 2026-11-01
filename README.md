@@ -462,6 +462,97 @@ YouTube es una casilla que hay que marcar, y sube en privado.
 Las tandas llevan `concurrency` por nombre: dos corridas a la vez generarían la
 misma sesión dos veces, porque las dos verían el mismo hueco.
 
+## MCP: asistentes
+
+Dos servidores [MCP](https://modelcontextprotocol.io) para que Claude (o cualquier
+cliente MCP) use Omtana. Los dos son **Streamable HTTP sin estado** — JSON-RPC por
+POST, sin sesiones ni SSE — porque corren en la función de Netlify, que nace y
+muere en cada petición. El protocolo está escrito a mano en
+`src/lib/mcp/protocol.ts` (unas 300 líneas, con zod para validar y para el JSON
+Schema de cada herramienta) y probado contra el cliente oficial del SDK.
+
+| Servidor | URL | Credencial |
+|---|---|---|
+| Personas | `/api/mcp` | `Authorization: Bearer omt_…`, una llave por persona, creada en **/perfil → Asistentes (MCP)** |
+| Admin | `/api/mcp/admin` | `Authorization: Bearer $OMTANA_ADMIN_MCP_TOKEN` |
+
+Necesita la migración `0008` (`npm run db:push -- --solo 0008`): llaves, uso y
+costos, bitácora y las columnas de guion propio.
+
+### El de las personas
+
+Hace lo que hace la web, con la misma cuenta y el mismo cobro (cupo Free del
+mes o un crédito; si falla, se devuelve). Toda creación devuelve el
+`player_url`.
+
+| Herramienta | Qué hace |
+|---|---|
+| `get_account` | Plan, cupo, créditos, valores por defecto |
+| `list_options` | Voces, intenciones, respiración (con qué voces está grabada) y música |
+| `create_meditation` | **Con parámetros**: intención, contexto, duración, voz, respiración, música, idioma |
+| `create_meditation_from_script` | **Con guion propio**. `completo`: la sesión entera es el texto; `tramo`: el texto reemplaza el tramo personalizado de una plantilla. `[pausa 10]` deja diez segundos de silencio |
+| `generate_from_prompt` | **Desde un pedido libre**: Claude elige los parámetros del catálogo y la crea. `dry_run` muestra la propuesta sin cobrar |
+| `get_meditation` | Estado, `player_url` y `audio_url` (MP3 firmado, 3 h). `wait_seconds` espera hasta 45 s |
+| `list_my_meditations`, `set_visibility` | Lo suyo |
+
+**Música**: `music` la hornea en el MP3 (sirve para descargar el audio y
+llevárselo). Sin `music`, el audio va seco y el reproductor ofrece el banco en
+vivo, como siempre.
+
+Límites por persona: tres sesiones generándose a la vez y treinta pedidos
+libres por hora. El texto de los argumentos nunca se guarda en la bitácora:
+solo el nombre de la herramienta, cuánto tardó y los nombres de los campos.
+
+### El de administración
+
+Todo lo anterior para cualquier cuenta o para el catálogo (`for_user`; no cobra
+salvo `charge: true`), más la vista de la plataforma:
+
+| Herramienta | Qué hace |
+|---|---|
+| `get_overview` | Personas, sesiones por estado y canal (web/mcp/admin), tasa de falla, colgados, escuchas, créditos, costos |
+| `get_architecture` | Flujo, componentes, modelos por paso, precios, variables (solo si están), límites, filas por tabla |
+| `check_generation_health` | La mezcla de prueba, en la función que genera |
+| `get_costs` | **Traza de tokens y costos** por día, modelo, operación, canal o persona; costo medio por sesión y por duración; plantillas; las más caras |
+| `get_meditation_trace` | Una sesión paso a paso: cuánto tardó cada paso y cada llamada al modelo y a la voz con sus tokens, caracteres y costo |
+| `list_errors`, `list_logs`, `list_jobs` | Fallas agrupadas por patrón, colgados, bitácora con filtros |
+| `retry_generation`, `reap_stale_jobs` | Reintentar una fallida, barrer colgados |
+| `search_users`, `get_user`, `list_meditations`, `get_meditation`, `revoke_api_key`, `get_curation_report` | Personas, sesiones, llaves, curaduría |
+
+### Conectarlo
+
+```bash
+# Claude Code
+claude mcp add --transport http omtana https://omtana.com/api/mcp \
+  --header "Authorization: Bearer omt_…"
+claude mcp add --transport http omtana-admin https://omtana.com/api/mcp/admin \
+  --header "Authorization: Bearer $OMTANA_ADMIN_MCP_TOKEN"
+```
+
+Con la API de Mensajes, el conector MCP recibe la llave en `authorization_token`.
+Los clientes que solo hablan stdio pueden usar `npx mcp-remote <url> --header
+"Authorization: Bearer …"`. Los conectores personalizados de claude.ai piden
+OAuth, que estos servidores todavía no implementan: es el siguiente paso si se
+quiere ofrecer "Conectar con Claude" sin copiar una llave.
+
+### Costos y trazas
+
+Cada llamada a un proveedor deja una fila en `omtana_usage_events`: tokens de
+entrada, salida, razonamiento y caché que informó Anthropic, o caracteres de
+ElevenLabs, y el costo estimado en USD, colgada de la meditación, el job, la
+plantilla y la persona (`src/lib/telemetry.ts`, con `AsyncLocalStorage`: el
+motor no pasa ids de mano en mano). Cada paso de la generación, cada aviso al
+equipo y cada llamada MCP quedan en `omtana_logs` con su hora, que es de donde
+sale la línea de tiempo de `get_meditation_trace`.
+
+El costo es una **estimación** con la lista de precios pública
+(`src/lib/pricing.ts`, con fecha): no conoce descuentos ni el plan de
+ElevenLabs, que se fija con `ELEVENLABS_USD_PER_1K_CHARS`. Por eso se guarda
+también lo medido: si un precio cambia, se recalcula sobre los tokens. Un
+modelo que no está en la tabla queda con costo nulo, no en cero. Las llamadas
+del CLI (respiración, muestras de voz, presentación de video, curaduría) también
+quedan registradas, con su operación.
+
 ## Estructura
 
 ```
@@ -476,8 +567,21 @@ src/
   lib/
     supabase.ts           cliente único con service role (marcado server-only)
     supabase-client.ts    el mismo cliente sin la marca, para netlify/functions
-    alerts.ts             avisos al equipo: webhook (Slack/Discord) y correo
+    alerts.ts             avisos al equipo: webhook (Slack/Discord), correo y bitácora
     auth.ts               sesiones propias, scrypt, cupo mensual
+    telemetry.ts          trazas: uso y costo por llamada, bitácora (AsyncLocalStorage)
+    pricing.ts            precios por modelo y por caracter, con fecha
+    mcp/
+      protocol.ts         MCP Streamable HTTP sin estado (JSON-RPC por POST)
+      user-server.ts      herramientas de /api/mcp
+      admin-server.ts     herramientas de /api/mcp/admin
+      api-keys.ts         llaves omt_ por persona (solo el hash en la base)
+    meditations/
+      create.ts           crear, cobrar y encargar: lo comparten la web y los MCP
+      actions.ts          con parámetros, con guion propio, desde un pedido libre
+      interpret.ts        pedido libre → parámetros del catálogo, con Claude
+      refund.ts           devolver lo cobrado por una generación fallida
+    admin/reports.ts      resumen, costos, trazas, errores, arquitectura
     session-plan.ts       el reparto plantilla/tramos — lo usan app y scripts
     generation/
       template.ts         escribe y cachea los bloques fijos
@@ -485,6 +589,7 @@ src/
       tts.ts              ElevenLabs
       audio.ts            mezcla con ffmpeg (y dónde encontrarlo)
       pipeline.ts         orquesta y persiste
+      custom-script.ts    guiones propios: bloques y "[pausa N]"
       dispatch.ts         en qué función corre y el encargo firmado
       jobs.ts             tomar un job, registrar fallas, barrer colgados
       health.ts           ¿este entorno puede generar? mezcla de prueba
@@ -522,8 +627,10 @@ llave se filtrara.
 firmadas de tres horas.
 
 **Se cobra al encolar, se devuelve si falla.** Al generar se descuenta el cupo
-del mes o un crédito; si la generación falla, el primer `/status` que vea el
-error devuelve el crédito y lo deja anotado en el libro de movimientos.
+del mes o un crédito; si la generación falla, el primer `/status` (o
+`get_meditation` del MCP) que vea el error devuelve lo cobrado y lo deja
+anotado en el libro de movimientos. Solo se devuelve lo que de verdad se cobró:
+una sesión de Pro fallida no suma un crédito.
 
 **El cupo mensual no necesita cron.** Se reinicia solo la primera vez que el
 usuario aparece dentro de un mes nuevo.

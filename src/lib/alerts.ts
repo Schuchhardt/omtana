@@ -15,9 +15,17 @@
  *
  * Nunca lanza: un aviso que no sale no puede tapar el error que lo provocó.
  *
+ * Además, cada aviso queda en `omtana_logs` (nivel `error`, fuente `alert`):
+ * es lo que lee el MCP de administración para listar errores sin abrir Slack.
+ *
  * Sin "server-only" ni alias `@/` a propósito: lo importan las funciones de
  * Netlify, que se empaquetan fuera de Next.
  */
+
+import { logEvent } from "./telemetry";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const asUuid = (value: unknown) => (typeof value === "string" && UUID.test(value) ? value : undefined);
 
 export interface Alert {
   /** Una línea: qué se rompió. */
@@ -37,6 +45,21 @@ interface AlertDeps {
   fetch?: typeof fetch;
   env?: NodeJS.ProcessEnv;
   log?: (...args: unknown[]) => void;
+  /** Guardar el aviso en la bitácora. Por defecto sí; los tests lo apagan. */
+  persist?: (alert: Alert) => Promise<void>;
+}
+
+async function persistAlert(alert: Alert): Promise<void> {
+  await logEvent({
+    level: "error",
+    source: "alert",
+    message: alert.title,
+    data: { detail: alert.detail ?? null, fields: alert.fields ?? {} },
+    trace: {
+      meditationId: asUuid(alert.fields?.["meditación"]),
+      jobId: asUuid(alert.fields?.job),
+    },
+  });
 }
 
 const TIMEOUT_MS = 5_000;
@@ -132,7 +155,11 @@ export async function notifyAdmin(alert: Alert, deps: AlertDeps = {}): Promise<A
     });
   }
 
-  const outcomes = await Promise.allSettled(jobs.map((j) => j.send()));
+  const persist = deps.persist ?? persistAlert;
+  const [outcomes] = await Promise.all([
+    Promise.allSettled(jobs.map((j) => j.send())),
+    persist(alert).catch(() => undefined),
+  ]);
   outcomes.forEach((outcome, i) => {
     const name = jobs[i].name;
     if (outcome.status === "fulfilled") {

@@ -28,6 +28,7 @@ import { log, requireEnv, parseArgs, fatal, type Args } from "./_bootstrap";
 import { db } from "../src/lib/supabase";
 import { downloadAudio, ensureBucket, removeAudio, uploadAudio } from "../src/lib/storage";
 import { synthesize } from "../src/lib/generation/tts";
+import { withTrace } from "../src/lib/telemetry";
 import { durationOf, ensureFfmpeg, run, FFMPEG_BIN } from "../src/lib/generation/audio";
 import {
   assembleBreathing,
@@ -754,4 +755,7 @@ function clock(seconds: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
 }
 
-main().catch((err) => fatal(err instanceof Error ? err.message : String(err)));
+// Todo lo que se graba acá queda en el informe de costos como "respiracion".
+withTrace({ operation: "respiracion", via: "cli" }, main).catch((err) =>
+  fatal(err instanceof Error ? err.message : String(err)),
+);

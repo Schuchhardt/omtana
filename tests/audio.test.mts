@@ -149,6 +149,25 @@ describe("assemble", () => {
     assert.equal(result.segments[0].seconds, 6);
     assert.equal(result.totalSeconds, 7);
   });
+
+  test("guion propio: el silencio de [pausa N] va entero al final del bloque, sin repartirse", async () => {
+    // Con una pausa interna: si el silencio se repartiera, el bloque mediría
+    // lo mismo, pero el corte quedaría en medio. Se mide el arranque del siguiente.
+    const voice = await readFile(await tone("guion-a.wav", 4, { gapAt: [1.5, 2.2] }));
+    const next = await readFile(await tone("guion-b.wav", 2));
+    const result = await audio.assemble(
+      [
+        { position: 0, audio: voice, targetSeconds: 0, trailingSilenceSeconds: 6 },
+        { position: 1, audio: next, targetSeconds: 0, trailingSilenceSeconds: 0 },
+      ],
+      null,
+      { tailSeconds: 1 },
+    );
+    assert.equal(result.segments[0].seconds, 10);
+    assert.equal(result.segments[1].startOffsetSeconds, 10);
+    assert.equal(result.segments[1].seconds, 2);
+    assert.equal(result.totalSeconds, 13);
+  });
 });
 
 describe("chequeo de salud", () => {

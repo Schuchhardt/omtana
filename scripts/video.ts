@@ -28,6 +28,7 @@ import { downloadAudio, ensureBucket, uploadAudio, FileTooLargeError } from "../
 import { createHash } from "node:crypto";
 import { durationOf, ensureFfmpeg, FFMPEG_BIN, run } from "../src/lib/generation/audio";
 import { synthesize } from "../src/lib/generation/tts";
+import { withTrace } from "../src/lib/telemetry";
 import {
   ensureFonts,
   ensureLogo,
@@ -647,7 +648,11 @@ async function introVoice(
       log.warn("Sin ELEVENLABS_API_KEY la presentación va muda: la carta se muestra sola.");
       return null;
     }
-    audio = await synthesize({ voiceId: voice.provider_voice_id, text, settings: voice.provider_settings });
+    const voiceId = voice.provider_voice_id;
+    audio = await withTrace(
+      { operation: "video:presentacion", meditationId: meditation.id, via: "cli" },
+      () => synthesize({ voiceId, text, settings: voice.provider_settings }),
+    );
     try {
       await uploadAudio(path, audio);
     } catch (err) {

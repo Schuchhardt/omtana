@@ -389,6 +389,27 @@ export const es = {
     deleteConfirm: "Sí, eliminar todo",
     deleting: "Eliminando…",
     saveError: "No pudimos guardar esos ajustes.",
+    mcp: {
+      title: "Asistentes (MCP)",
+      intro:
+        "Conecta Claude u otro asistente para que cree meditaciones con tu cuenta: con parámetros, con tu propio guion o desde un pedido libre, y te devuelva el link. Cobra igual que la web.",
+      endpoint: "URL del servidor",
+      namePlaceholder: "Nombre de la llave (p. ej. Claude Desktop)",
+      create: "Crear llave",
+      creating: "Creando…",
+      newKeyTitle: "Tu llave nueva",
+      newKeyNote: "Cópiala ahora: no se vuelve a mostrar. Quien la tenga puede generar con tu cuenta.",
+      copy: "Copiar",
+      copied: "Copiada",
+      howTo: "En Claude Code:",
+      empty: "Todavía no tienes llaves.",
+      lastUsed: "último uso {date}",
+      neverUsed: "sin usar",
+      revoked: "revocada",
+      revoke: "Revocar",
+      revoking: "Revocando…",
+      createError: "No pudimos crear la llave.",
+    },
   },
 
   /* ───────────────────────────── personalizar ───────────────────────────── */
@@ -659,6 +680,7 @@ export const es = {
       "Tu contexto": "Tu contexto",
       "Refuerzo e imágenes": "Refuerzo e imágenes",
       Cierre: "Cierre",
+      "Tu guion": "Tu guion",
     } as Record<string, string>,
     gender: {
       Femenina: "Femenina",

@@ -13,10 +13,11 @@
  * esa referencia queda guardada con la propuesta.
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { recordAnthropicUsage } from "../telemetry";
 import { z } from "zod";
 import type { BalanceReport } from "./balance";
 
-const MODEL = "claude-opus-5";
+export const MODEL = "claude-opus-5";
 
 export interface Evidence {
   title: string;
@@ -207,6 +208,7 @@ export async function research(
   const findings = await investigate(client, brief);
 
   opts.onStep?.("ordenando propuestas");
+  const startedAt = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 16000,
@@ -219,6 +221,14 @@ export async function research(
         content: `${brief}\n\nEsto es lo que encontraste al investigar:\n\n${findings}\n\nDevuelve las propuestas en el esquema. Como mucho ${opts.intentions} intenciones y ${opts.exercises} ejercicios; menos está bien si no hay nada que valga la pena. Cada ejercicio tiene que traer al menos una referencia con URL real de las que consultaste.`,
       },
     ],
+  });
+
+  await recordAnthropicUsage({
+    operation: "curaduria:propuestas",
+    requestedModel: MODEL,
+    response,
+    startedAt,
+    trace: { via: "cli" },
   });
 
   if (response.stop_reason === "refusal") {
@@ -302,6 +312,7 @@ Escribe lo que encontraste en prosa, con las URLs. Todavía no propongas el form
   ];
 
   for (let turn = 0; turn < 6; turn++) {
+    const startedAt = Date.now();
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 16000,
@@ -310,6 +321,15 @@ Escribe lo que encontraste en prosa, con las URLs. Todavía no propongas el form
       output_config: { effort: "medium" },
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 10 }],
       messages,
+    });
+
+    await recordAnthropicUsage({
+      operation: "curaduria:investigacion",
+      requestedModel: MODEL,
+      response,
+      startedAt,
+      metadata: { turn },
+      trace: { via: "cli" },
     });
 
     if (response.stop_reason === "refusal") {

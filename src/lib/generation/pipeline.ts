@@ -7,7 +7,18 @@ import { assemble, ensureFfmpeg, type SegmentInput } from "./audio";
 import { ensureTemplate, PLAN_VERSION } from "./template";
 import { claimJob, failGeneration } from "./jobs";
 import { breathingSlotSeconds } from "../breathing";
-import type { BreathingRender, Intention, Meditation, MusicTrack, Voice } from "../types";
+import { logEvent, withTrace } from "../telemetry";
+import { scriptAsPlainText, splitScript } from "./custom-script";
+import type { ScriptResult } from "./script";
+import { channelOf, type BreathingRender, type Intention, type Meditation, type MusicTrack, type Voice } from "../types";
+
+type LoadedMeditation = Meditation & {
+  intention: Intention | null;
+  voice: Voice | null;
+  music: MusicTrack | null;
+};
+
+type Step = (s: string) => Promise<void>;
 
 export interface GenerateOptions {
   onStep?: (step: string) => void;
@@ -24,15 +35,6 @@ export async function generateMeditation(
   meditationId: string,
   opts: GenerateOptions = {},
 ): Promise<void> {
-  const step = (s: string) => {
-    opts.onStep?.(s);
-    return db()
-      .from("omtana_generation_jobs")
-      .update({ step: s })
-      .eq("meditation_id", meditationId)
-      .eq("status", "running");
-  };
-
   const { data } = await db()
     .from("omtana_meditations")
     .select("*, intention:omtana_intentions(*), voice:omtana_voices(*), music:omtana_music_tracks(*)")
@@ -40,12 +42,55 @@ export async function generateMeditation(
     .maybeSingle();
 
   if (!data) throw new Error(`No existe la meditación ${meditationId}.`);
+  const meditation = data as LoadedMeditation;
 
-  const meditation = data as Meditation & {
-    intention: Intention | null;
-    voice: Voice | null;
-    music: MusicTrack | null;
+  // Todo lo que se gaste adentro —modelo, voz, la plantilla que se arme de
+  // paso— queda colgado de esta sesión y de quien la pidió.
+  return withTrace(
+    {
+      meditationId,
+      userId: meditation.user_id,
+      via: channelOf(meditation),
+    },
+    () => generateLoaded(meditation, opts),
+  );
+}
+
+async function generateLoaded(meditation: LoadedMeditation, opts: GenerateOptions): Promise<void> {
+  const meditationId = meditation.id;
+  const startedAt = Date.now();
+  let previous: { step: string; at: number } | null = null;
+
+  /*
+   * Cada paso queda en el job (lo que ve quien espera) y en la bitácora con su
+   * hora, que es de donde sale la traza: cuánto tardó cada paso.
+   */
+  const step: Step = async (s) => {
+    opts.onStep?.(s);
+    const now = Date.now();
+    await db()
+      .from("omtana_generation_jobs")
+      .update({ step: s })
+      .eq("meditation_id", meditationId)
+      .eq("status", "running");
+    await logEvent({
+      source: "generation",
+      message: `paso: ${s}`,
+      data: {
+        step: s,
+        previous: previous?.step ?? null,
+        previous_ms: previous ? now - previous.at : null,
+        elapsed_ms: now - startedAt,
+      },
+    });
+    previous = { step: s, at: now };
   };
+
+  if (meditation.script_mode === "completo" && meditation.script_override?.trim()) {
+    await generateFromOwnScript(meditation, step);
+    await step("listo");
+    return;
+  }
 
   const voice = meditation.voice;
   if (!voice) throw new Error("La meditación no tiene voz asignada.");
@@ -124,15 +169,18 @@ export async function generateMeditation(
     { onStep: opts.onStep },
   );
 
-  /* 2 ─ Guion del tramo personalizado. */
+  /* 2 ─ Guion del tramo personalizado: lo escribe el modelo, o lo trajo la persona. */
   await step("guion");
-  const script = await writeScript({
-    intention: meditation.intention_text,
-    context: meditation.context_text,
-    locale: meditation.locale,
-    voiceName: voice.name,
-    sections: plan,
-  });
+  const script =
+    meditation.script_mode === "tramo" && meditation.script_override?.trim()
+      ? ownSegment(meditation, plan)
+      : await writeScript({
+          intention: meditation.intention_text,
+          context: meditation.context_text,
+          locale: meditation.locale,
+          voiceName: voice.name,
+          sections: plan,
+        });
 
   /* 3 ─ Síntesis de voz, solo de lo nuevo. */
   const inputs: SegmentInput[] = [];
@@ -152,6 +200,7 @@ export async function generateMeditation(
     }
 
     const text = script.segments[section.position];
+    if (!text) continue;
     await step(`voz:${section.position}`);
     const mp3 = await synthesize({
       voiceId: voice.provider_voice_id,
@@ -218,6 +267,89 @@ export async function generateMeditation(
       ready_at: new Date().toISOString(),
     })
     .eq("id", meditationId);
+
+  await step("listo");
+}
+
+/**
+ * El tramo personalizado con el texto de la persona. Va a la primera sección
+ * dinámica del reparto (hoy hay una sola) y no lleva palabras en pantalla: no
+ * hay modelo que las elija.
+ */
+function ownSegment(meditation: Meditation, plan: ReturnType<typeof planSession>): ScriptResult {
+  const dynamic = plan.find((s) => s.kind === "dynamic");
+  if (!dynamic) throw new Error("El reparto de esta duración no tiene tramo personalizado.");
+  return {
+    title: meditation.title,
+    segments: { [dynamic.position]: scriptAsPlainText(meditation.script_override ?? "") },
+    keywords: [],
+  };
+}
+
+/**
+ * Una meditación cuyo guion entero es el de la persona: sin plantilla y sin
+ * modelo. El texto se parte en bloques (`splitScript`), cada uno se graba con
+ * la voz elegida y entre bloques queda el silencio que la persona marcó con
+ * `[pausa N]`. Dura lo que dura su texto, no una de las duraciones del menú.
+ */
+async function generateFromOwnScript(meditation: LoadedMeditation, step: Step): Promise<void> {
+  const voice = meditation.voice;
+  if (!voice) throw new Error("La meditación no tiene voz asignada.");
+  if (!voice.provider_voice_id) {
+    throw new Error(
+      `La voz "${voice.name}" no tiene provider_voice_id. Corre "npm run voices:link".`,
+    );
+  }
+
+  const blocks = splitScript(meditation.script_override ?? "");
+  if (blocks.length === 0) throw new Error("El guion vino vacío.");
+
+  await ensureFfmpeg();
+  await ensureBucket();
+
+  const inputs: SegmentInput[] = [];
+  for (const [i, block] of blocks.entries()) {
+    await step(`voz:${i}`);
+    const mp3 = await synthesize({
+      voiceId: voice.provider_voice_id,
+      text: block.text,
+      settings: voice.provider_settings,
+    });
+    inputs.push({ position: i, audio: mp3, targetSeconds: 0, trailingSilenceSeconds: block.pauseAfter });
+  }
+
+  await step("mezcla");
+  const music = meditation.music ? await downloadAudio(meditation.music.audio_path) : null;
+  const assembled = await assemble(inputs, music);
+  const audioPath = await uploadAudio(`meditations/${meditation.id}/session.mp3`, assembled.mp3);
+
+  await step("guardado");
+  await db().from("omtana_meditation_segments").delete().eq("meditation_id", meditation.id);
+  await db()
+    .from("omtana_meditation_segments")
+    .insert(
+      assembled.segments.map((s) => ({
+        meditation_id: meditation.id,
+        position: s.position,
+        kind: "dynamic",
+        label: "Tu guion",
+        script_text: blocks[s.position]?.text ?? "",
+        start_offset_seconds: s.startOffsetSeconds,
+        seconds: s.seconds,
+      })),
+    );
+  await db().from("omtana_meditation_cues").delete().eq("meditation_id", meditation.id);
+
+  await db()
+    .from("omtana_meditations")
+    .update({
+      audio_path: audioPath,
+      duration_seconds: assembled.totalSeconds,
+      plan_version: PLAN_VERSION,
+      status: "ready",
+      ready_at: new Date().toISOString(),
+    })
+    .eq("id", meditation.id);
 }
 
 /**
@@ -287,14 +419,16 @@ export async function runGenerationJob(
       .update({ status: "generating" })
       .eq("id", meditationId);
 
-    await generateMeditation(meditationId);
+    await withTrace({ jobId }, () => generateMeditation(meditationId));
     await db()
       .from("omtana_generation_jobs")
       .update({ status: "done", step: "listo", finished_at: new Date().toISOString() })
       .eq("id", jobId);
     return "done";
   } catch (err) {
-    await failGeneration({ meditationId, jobId, error: err });
+    await withTrace({ meditationId, jobId }, () =>
+      failGeneration({ meditationId, jobId, error: err }),
+    );
     throw err;
   }
 }

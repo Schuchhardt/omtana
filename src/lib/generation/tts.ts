@@ -1,7 +1,9 @@
+import { recordTtsUsage } from "../telemetry";
+
 const API = "https://api.elevenlabs.io/v1";
 
 /** Modelo multilingüe: la misma voz sirve para ES, EN y PT. */
-const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
+export const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
 
 export interface SynthesisOptions {
   voiceId: string;
@@ -27,6 +29,7 @@ export async function synthesize({
 }: SynthesisOptions): Promise<Buffer> {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error("Falta ELEVENLABS_API_KEY.");
+  const startedAt = Date.now();
 
   for (let attempt = 1; ; attempt++) {
     let res: Response;
@@ -61,7 +64,20 @@ export async function synthesize({
       continue;
     }
 
-    if (res.ok) return Buffer.from(await res.arrayBuffer());
+    if (res.ok) {
+      const audio = Buffer.from(await res.arrayBuffer());
+      // ElevenLabs informa lo que cobró en `character-cost`; si no viene, lo que
+      // se mandó, que es lo que cobra el modelo multilingüe.
+      const billed = Number(res.headers.get("character-cost"));
+      await recordTtsUsage({
+        model: MODEL_ID,
+        characters: Number.isFinite(billed) && billed > 0 ? billed : text.length,
+        voiceId,
+        startedAt,
+        requestId: res.headers.get("request-id"),
+      });
+      return audio;
+    }
 
     const detail = await res.text().catch(() => "");
     // 429 y 5xx son "vuelve más tarde"; el resto es una respuesta, no un tropiezo.

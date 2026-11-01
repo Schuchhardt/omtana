@@ -388,6 +388,27 @@ export const en: Copy = {
     deleteConfirm: "Yes, delete everything",
     deleting: "Deleting…",
     saveError: "We could not save those settings.",
+    mcp: {
+      title: "Assistants (MCP)",
+      intro:
+        "Connect Claude or another assistant so it can create meditations with your account — from parameters, your own script, or a free-form request — and hand you back the link. Same billing as the website.",
+      endpoint: "Server URL",
+      namePlaceholder: "Key name (e.g. Claude Desktop)",
+      create: "Create key",
+      creating: "Creating…",
+      newKeyTitle: "Your new key",
+      newKeyNote: "Copy it now: it won't be shown again. Anyone who has it can generate with your account.",
+      copy: "Copy",
+      copied: "Copied",
+      howTo: "In Claude Code:",
+      empty: "You don't have any keys yet.",
+      lastUsed: "last used {date}",
+      neverUsed: "never used",
+      revoked: "revoked",
+      revoke: "Revoke",
+      revoking: "Revoking…",
+      createError: "We couldn't create the key.",
+    },
   },
 
   /* ───────────────────────────── customize ───────────────────────────── */
@@ -656,6 +677,7 @@ export const en: Copy = {
       "Tu contexto": "Your context",
       "Refuerzo e imágenes": "Reinforcement and imagery",
       Cierre: "Closing",
+      "Tu guion": "Your script",
     },
     gender: {
       Femenina: "Female",

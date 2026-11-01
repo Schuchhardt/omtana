@@ -78,3 +78,35 @@ export async function deleteAccount() {
   await destroySession();
   redirect("/");
 }
+
+/* ───────────────────────────── llaves MCP ───────────────────────────── */
+
+const keyNameSchema = z.string().trim().max(60);
+
+/**
+ * Crea una llave para que un asistente use el MCP con esta cuenta. La llave
+ * entera se devuelve una sola vez; en la base queda su hash.
+ */
+export async function createMcpKey(name: unknown) {
+  const user = await requireUser();
+  const t = copy(await getLang()).profile.mcp;
+  const parsed = keyNameSchema.safeParse(name);
+  try {
+    const { createApiKey } = await import("@/lib/mcp/api-keys");
+    const { key, row } = await createApiKey(user.id, parsed.success ? parsed.data : "");
+    revalidatePath("/perfil");
+    return { key, prefix: row.prefix };
+  } catch (err) {
+    return { error: err instanceof Error && /llaves activas/.test(err.message) ? err.message : t.createError };
+  }
+}
+
+export async function revokeMcpKey(keyId: unknown) {
+  const user = await requireUser();
+  const id = z.string().uuid().safeParse(keyId);
+  if (!id.success) return { ok: false };
+  const { revokeApiKey } = await import("@/lib/mcp/api-keys");
+  const ok = await revokeApiKey(id.data, user.id);
+  revalidatePath("/perfil");
+  return { ok };
+}
