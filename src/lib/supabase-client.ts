@@ -1,0 +1,40 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Este archivo no importa "server-only" a propósito: lo usa también el motor de
+ * generación dentro de las funciones de Netlify (`netlify/functions/`), que se
+ * empaquetan con esbuild sin la condición `react-server`, y ahí "server-only"
+ * revienta al cargar. La app lo importa a través de `./supabase`, que sí lleva
+ * la marca y es lo que impide que llegue a un componente de cliente.
+ */
+
+/**
+ * Cliente único con service role key. No hay RLS ni Supabase Auth en este
+ * proyecto: toda la autorización se resuelve en el servidor (src/lib/auth.ts)
+ * y ninguna consulta sale desde el navegador.
+ */
+let client: SupabaseClient | null = null;
+
+/** Permite que la app arranque y se vea antes de tener el proyecto de Supabase. */
+export function isConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+export function db(): SupabaseClient {
+  if (client) return client;
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error(
+      "Faltan SUPABASE_URL y/o SUPABASE_SERVICE_ROLE_KEY. Copia .env.example a .env.local y complétalas.",
+    );
+  }
+
+  client = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { "x-omtana-client": "server" } },
+  });
+  return client;
+}

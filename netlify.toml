@@ -13,3 +13,27 @@
 
   # Plantilla de variables: nombres y comentarios, nunca valores reales.
   SECRETS_SCAN_OMIT_PATHS = ".env.example"
+
+# ─── Generación de meditaciones ──────────────────────────────────────────────
+# La app no genera dentro de su propia función: una síncrona se corta a los
+# 60 s y en Lambda no hay ffmpeg. `POST /api/meditations` le pasa el encargo a
+# netlify/functions/generate-background, que corre en segundo plano (15 min) y
+# lleva ffmpeg empaquetado.
+#
+# `ffmpeg-static` va fuera del bundle para que su `__dirname` apunte al binario
+# real, y el binario (~80 MB) se suma explícitamente: esbuild no lo ve porque no
+# es código. tests/netlify-config.test.ts comprueba que esto siga así.
+[functions."generate-background"]
+  node_bundler = "esbuild"
+  external_node_modules = ["ffmpeg-static"]
+  included_files = ["node_modules/ffmpeg-static/**"]
+
+# Misma configuración: tiene que probar el mismo ffmpeg que va a usar la otra.
+[functions."generation-health"]
+  node_bundler = "esbuild"
+  external_node_modules = ["ffmpeg-static"]
+  included_files = ["node_modules/ffmpeg-static/**"]
+
+# Barre generaciones colgadas cada 15 minutos. No mezcla audio: sin ffmpeg.
+[functions."reap-generations"]
+  node_bundler = "esbuild"

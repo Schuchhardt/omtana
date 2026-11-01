@@ -5,11 +5,15 @@ import { currentUser } from "@/lib/auth";
 import { remainingFree } from "@/lib/queries";
 import { paymentsEnabled } from "@/lib/payments";
 import { runGenerationJob } from "@/lib/generation/pipeline";
+import { dispatchToBackground, generationRunner } from "@/lib/generation/dispatch";
+import { failGeneration } from "@/lib/generation/jobs";
 import { CREDIT_COST_PER_MEDITATION, PLAN } from "@/lib/config";
 import { breathingSlotSeconds } from "@/lib/breathing";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
+// Solo pesa en local (`inline`): en Netlify la generación no corre en esta
+// función, que se corta a los 60 s, sino en generate-background.
 export const maxDuration = 300;
 
 const schema = z.object({
@@ -118,21 +122,44 @@ export async function POST(request: Request) {
     });
   }
 
-  const { data: job } = await db()
+  const { data: job, error: jobError } = await db()
     .from("omtana_generation_jobs")
     .insert({ meditation_id: meditation.id, status: "queued" })
     .select("id")
     .single();
 
-  // La respuesta sale de inmediato; el reproductor consulta /status mientras tanto.
-  after(async () => {
-    if (!job) return;
-    try {
-      await runGenerationJob(meditation.id, job.id);
-    } catch (err) {
-      console.error(`[omtana] generación ${meditation.id} falló:`, err);
+  if (!job) {
+    // Sin job nadie la iba a generar y la sesión quedaba "pendiente" para
+    // siempre, con lo cobrado adentro. Fallida, /status devuelve el crédito.
+    await failGeneration({
+      meditationId: meditation.id,
+      jobId: null,
+      error: `No se pudo crear el job de generación: ${jobError?.message ?? "sin detalle"}`,
+    });
+    return NextResponse.json({ id: meditation.id }, { status: 201 });
+  }
+
+  if (generationRunner() === "background") {
+    // Producción: una función en segundo plano con 15 minutos y ffmpeg. Acá
+    // solo se encarga; el reproductor consulta /status mientras tanto.
+    const sent = await dispatchToBackground({
+      origin: new URL(request.url).origin,
+      meditationId: meditation.id,
+      jobId: job.id,
+    });
+    if (!sent.ok) {
+      await failGeneration({ meditationId: meditation.id, jobId: job.id, error: sent.reason });
     }
-  });
+  } else {
+    // Local: en el mismo proceso, después de responder.
+    after(async () => {
+      try {
+        await runGenerationJob(meditation.id, job.id);
+      } catch (err) {
+        console.error(`[omtana] generación ${meditation.id} falló:`, err);
+      }
+    });
+  }
 
   return NextResponse.json({ id: meditation.id }, { status: 201 });
 }

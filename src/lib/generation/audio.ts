@@ -3,25 +3,142 @@ import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const FFMPEG = process.env.FFMPEG_PATH ?? "ffmpeg";
-const FFPROBE = process.env.FFPROBE_PATH ?? "ffprobe";
+/* ───────────────────────── dónde está ffmpeg ───────────────────────── */
 
-function exec(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+/**
+ * Nombre simbólico del binario. Quien llama a `run(FFMPEG_BIN, …)` no sabe ni
+ * le importa dónde está ffmpeg: `exec` lo resuelve la primera vez y lo recuerda.
+ */
+export const FFMPEG_BIN = "ffmpeg";
+
+const EXE = process.platform === "win32" ? ".exe" : "";
+
+/** Rutas que alguien registró a mano; ver `registerFfmpegCandidate`. */
+const extraCandidates: string[] = [];
+
+/**
+ * Suma una ruta a la lista de búsqueda. La usa la función de Netlify, que es la
+ * única que sabe dónde quedó `ffmpeg-static` después de empaquetarse.
+ */
+export function registerFfmpegCandidate(path: string | null | undefined): void {
+  if (path && !extraCandidates.includes(path)) extraCandidates.push(path);
+}
+
+/**
+ * Dónde se busca ffmpeg, en orden:
+ *
+ * 1. `FFMPEG_PATH`, si alguien lo fijó.
+ * 2. El del sistema (`brew install ffmpeg`, `apt install ffmpeg`): es el que se
+ *    usa en local y en GitHub Actions, y con el que se afinaron los videos.
+ * 3. El estático de `ffmpeg-static`, que viaja en `node_modules`. Es el que usa
+ *    producción: las funciones de Netlify (Lambda) no traen ningún binario, y
+ *    sin esto cada generación fallaba con "No hay ffmpeg en este entorno".
+ *
+ * No hace falta ffprobe: la duración se lee con el mismo ffmpeg (`durationOf`),
+ * así que hay un solo binario que empaquetar.
+ */
+export function ffmpegCandidates(
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd(),
+): string[] {
+  const staticBin = join("node_modules", "ffmpeg-static", `ffmpeg${EXE}`);
+  const list = [
+    env.FFMPEG_PATH,
+    `ffmpeg${EXE}`,
+    ...extraCandidates,
+    join(cwd, staticBin),
+    // Raíz de la función en Lambda: ahí deja Netlify lo que pide `included_files`.
+    env.LAMBDA_TASK_ROOT ? join(env.LAMBDA_TASK_ROOT, staticBin) : undefined,
+  ];
+  return [...new Set(list.filter((p): p is string => Boolean(p)))];
+}
+
+export interface FfmpegProbe {
+  path: string;
+  /** Primera línea de `ffmpeg -version`. */
+  version: string;
+}
+
+export interface FfmpegAttempt {
+  path: string;
+  error: string;
+}
+
+/** Ejecuta un binario tal cual, sin resolver nombres. */
+function spawnRaw(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     let err = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
-    child.on("error", (e) =>
-      reject(new Error(`No se pudo ejecutar ${bin}: ${e.message}. ¿Está instalado ffmpeg?`)),
-    );
+    child.on("error", (e) => reject(new Error(`No se pudo ejecutar ${bin}: ${e.message}`)));
     child.on("close", (code) =>
       code === 0
         ? resolve({ stdout: out, stderr: err })
         : reject(new Error(`${bin} salió con ${code}:\n${err.slice(-1500)}`)),
     );
   });
+}
+
+/**
+ * Prueba cada candidato con `-version` y devuelve el primero que responde.
+ * Si ninguno sirve, devuelve también por qué falló cada uno: es lo que va en
+ * el aviso, y lo que hace falta para arreglarlo sin adivinar.
+ */
+export async function probeFfmpeg(
+  candidates: string[] = ffmpegCandidates(),
+): Promise<{ found: FfmpegProbe | null; tried: FfmpegAttempt[] }> {
+  const tried: FfmpegAttempt[] = [];
+  for (const path of candidates) {
+    try {
+      const { stdout } = await spawnRaw(path, ["-hide_banner", "-version"]);
+      return { found: { path, version: stdout.split("\n")[0]?.trim() ?? "" }, tried };
+    } catch (err) {
+      tried.push({ path, error: err instanceof Error ? err.message.split("\n")[0] : String(err) });
+    }
+  }
+  return { found: null, tried };
+}
+
+export class FfmpegMissingError extends Error {
+  constructor(readonly tried: FfmpegAttempt[]) {
+    super(
+      `No hay ffmpeg en este entorno. La mezcla de audio lo necesita. Se probó: ` +
+        (tried.map((t) => `${t.path} (${t.error})`).join("; ") || "ninguna ruta") +
+        `. En producción viene de "ffmpeg-static": revisa que netlify.toml lo incluya ` +
+        `en la función (included_files) o define FFMPEG_PATH.`,
+    );
+    this.name = "FfmpegMissingError";
+  }
+}
+
+/** Solo se recuerda el éxito: si falta, la próxima vez se vuelve a buscar. */
+let resolved: FfmpegProbe | null = null;
+
+/**
+ * Comprueba que ffmpeg exista antes de gastar en modelo y en síntesis, y deja
+ * resuelta la ruta para todas las llamadas que vienen después.
+ *
+ * Sin esto el fallo aparecía recién al mezclar: después de escribir el guion y
+ * de grabar la voz, con el costo ya consumido.
+ */
+export async function ensureFfmpeg(): Promise<FfmpegProbe> {
+  if (resolved) return resolved;
+  const { found, tried } = await probeFfmpeg();
+  if (!found) throw new FfmpegMissingError(tried);
+  resolved = found;
+  return found;
+}
+
+/** Olvida la ruta resuelta. Solo para tests. */
+export function resetFfmpegCache(): void {
+  resolved = null;
+}
+
+async function exec(bin: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+  const path = bin === FFMPEG_BIN ? (await ensureFfmpeg()).path : bin;
+  return spawnRaw(path, args);
 }
 
 export async function run(bin: string, args: string[]): Promise<string> {
@@ -36,43 +153,38 @@ export async function runCapture(bin: string, args: string[]) {
   return exec(bin, args);
 }
 
-export { FFMPEG as FFMPEG_BIN, FFPROBE as FFPROBE_BIN };
+const TIMESTAMP = String.raw`(\d+):(\d{2}):(\d{2}(?:\.\d+)?)`;
 
-export class FfmpegMissingError extends Error {}
-
-let ffmpegChecked: boolean | null = null;
+function seconds(h: string, m: string, s: string): number {
+  return Number(h) * 3600 + Number(m) * 60 + Number(s);
+}
 
 /**
- * Comprueba que ffmpeg exista antes de gastar en modelo y en síntesis.
+ * Lee la duración de lo que ffmpeg escribe en stderr al abrir un archivo.
  *
- * En un runtime serverless (Netlify, Lambda) no viene incluido, y sin esto el
- * fallo aparecía recién al mezclar: después de escribir el guion y de grabar la
- * voz, con el costo ya consumido.
+ * `Duration:` es el mismo dato que daba `ffprobe -show_entries format=duration`
+ * (la duración del contenedor), redondeado al centésimo. Si el contenedor no
+ * la declara, se usa el último `time=` del recorrido, que es lo que de verdad
+ * se leyó.
  */
-export async function ensureFfmpeg(): Promise<void> {
-  if (ffmpegChecked === true) return;
+export function parseDuration(stderr: string): number {
+  const header = stderr.match(new RegExp(`Duration:\\s*${TIMESTAMP}`));
+  if (header) return seconds(header[1], header[2], header[3]);
 
-  try {
-    await run(FFMPEG, ["-version"]);
-    ffmpegChecked = true;
-  } catch {
-    ffmpegChecked = false;
-    throw new FfmpegMissingError(
-      `No hay ffmpeg en este entorno (${FFMPEG}). La mezcla de audio lo necesita. ` +
-        `En servidores sin binarios, genera con "npm run generate" desde una máquina que sí lo tenga, ` +
-        `o define FFMPEG_PATH apuntando a uno incluido en el despliegue.`,
-    );
-  }
+  const progress = [...stderr.matchAll(new RegExp(`time=\\s*${TIMESTAMP}`, "g"))].at(-1);
+  if (progress) return seconds(progress[1], progress[2], progress[3]);
+
+  return 0;
 }
 
 export async function durationOf(file: string): Promise<number> {
-  const out = await run(FFPROBE, [
-    "-v", "error",
-    "-show_entries", "format=duration",
-    "-of", "default=noprint_wrappers=1:nokey=1",
-    file,
+  // `-c copy` a `null` recorre los paquetes sin decodificar: rápido y sale con 0.
+  const { stderr } = await exec(FFMPEG_BIN, [
+    "-hide_banner", "-nostdin",
+    "-i", file,
+    "-c", "copy", "-f", "null", "-",
   ]);
-  return Number.parseFloat(out.trim()) || 0;
+  return parseDuration(stderr);
 }
 
 /* ───────────────────────── relleno repartido por las pausas ───────────────────────── */
@@ -109,7 +221,7 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
  * queremos evitar.
  */
 async function probePauses(file: string, spoken: number) {
-  const { stderr } = await exec(FFMPEG, [
+  const { stderr } = await exec(FFMPEG_BIN, [
     "-i", file,
     "-af", `silencedetect=noise=${SILENCE_FLOOR}:d=${MIN_PAUSE_SECONDS}`,
     "-f", "null", "-",
@@ -148,7 +260,7 @@ async function padToTarget(
 
   // Sin pausas donde repartir (tramo corto o voz corrida): la cola es lo que hay.
   if (pauses.length === 0) {
-    await run(FFMPEG, [
+    await run(FFMPEG_BIN, [
       "-y", "-i", source,
       "-af", `apad=whole_dur=${target.toFixed(3)}`,
       "-ar", "44100", "-ac", "1",
@@ -180,7 +292,7 @@ async function padToTarget(
       `concat=n=${chunks + pauses.length}:v=0:a=1,apad=whole_dur=${target.toFixed(3)}[out]`,
   ].join(";");
 
-  await run(FFMPEG, [
+  await run(FFMPEG_BIN, [
     "-y", "-i", source,
     "-filter_complex", filter,
     "-map", "[out]",
@@ -274,7 +386,7 @@ export async function assemble(
         `[voice][bed]amix=inputs=2:duration=first:normalize=0[mix]`,
       ].join(";");
 
-      await run(FFMPEG, [
+      await run(FFMPEG_BIN, [
         "-y", ...inputs, "-i", musicPath,
         "-filter_complex", filter,
         "-map", "[mix]",
@@ -282,7 +394,7 @@ export async function assemble(
         finalPath,
       ]);
     } else {
-      await run(FFMPEG, [
+      await run(FFMPEG_BIN, [
         "-y", ...inputs,
         "-filter_complex", `${concat};[dry]apad=whole_dur=${totalSeconds}[mix]`,
         "-map", "[mix]",

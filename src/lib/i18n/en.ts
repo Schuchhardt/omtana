@@ -468,6 +468,8 @@ export const en: Copy = {
     preparing: "Getting the session ready",
     readyNote: "Ready in under a minute",
     failedFallback: "The generation failed.",
+    failedInternal: "We couldn't finish your session because of a problem on our side. We've been notified and are looking into it.",
+    failedRefused: "The model wouldn't write a script with that context. Try describing it another way.",
     refundNote: "We gave the personalization back to you. You can try again.",
     retryCta: "Adjust and retry",
     back15: "Back 15 seconds",

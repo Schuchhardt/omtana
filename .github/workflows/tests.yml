@@ -1,0 +1,47 @@
+# Tests, tipos y lint en cada push y cada PR.
+#
+# No instala ffmpeg del sistema: los tests mezclan audio con el binario de
+# `ffmpeg-static`, que es el mismo que lleva la función de Netlify.
+# Si una versión nueva pierde un filtro o el codificador de MP3, falla acá y no
+# en la primera sesión que alguien pida.
+#
+# Localmente es exactamente lo mismo:
+#   npm test
+#   npm run typecheck
+#   npm run lint
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # Baja el binario de ffmpeg-static en su postinstall.
+      - run: npm ci
+
+      - name: Tipos
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Los tests fijan el ffmpeg empaquetado y, para las funciones, sacan del
+      # PATH el del sistema: da igual si el runner trae uno.
+      - name: Tests
+        run: npm test

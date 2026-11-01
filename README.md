@@ -47,9 +47,11 @@ npm run dev
 La app arranca y se puede recorrer entera aunque Supabase todavía no esté
 conectado: muestra un aviso arriba y estados vacíos con el comando que falta.
 
-Necesitas `ffmpeg` y `ffprobe` en el PATH (`brew install ffmpeg`) y **Node 22 o
-más** (`nvm use` lee el `.nvmrc`): con Node 20 la librería de Supabase falla al
-arrancar por falta de WebSocket nativo.
+`ffmpeg` viene con `npm install` (`ffmpeg-static`); si tienes uno en el PATH
+(`brew install ffmpeg`) se usa ese, que es con el que se afinaron los videos.
+`ffprobe` ya no hace falta. Necesitas **Node 22 o más** (`nvm use` lee el
+`.nvmrc`): con Node 20 la librería de Supabase falla al arrancar por falta de
+WebSocket nativo.
 
 ## Scripts
 
@@ -67,6 +69,7 @@ arrancar por falta de WebSocket nativo.
 | `npm run semanal` | La semana entera desde tu máquina: elige la sesión larga que más falta, la genera, renderiza 16:9 y 9:16 y, con `--publicar`, la programa en redes. Ver abajo. |
 | `npm run zernio` | Programa en YouTube y redes, por la API de Zernio, los videos ya renderizados. Ver abajo. |
 | `npm run ci` | Las tandas automáticas (`meditaciones`, `videos`) como una sola orden. Es lo que corre GitHub Actions. |
+| `npm test` | Los tests: la mezcla con el ffmpeg empaquetado, las funciones de Netlify empaquetadas como en el deploy, los avisos y el ciclo de los jobs. Ver "Tests". |
 | `npm run icons` | Rehace los PNG del manifiesto desde el símbolo de la marca. Solo cuando cambia el símbolo. |
 
 ### Generar meditaciones
@@ -471,15 +474,20 @@ src/
     planes/               créditos         perfil/     preferencias y datos
     terminos/             legal            api/        rutas de servidor
   lib/
-    supabase.ts           cliente único con service role
+    supabase.ts           cliente único con service role (marcado server-only)
+    supabase-client.ts    el mismo cliente sin la marca, para netlify/functions
+    alerts.ts             avisos al equipo: webhook (Slack/Discord) y correo
     auth.ts               sesiones propias, scrypt, cupo mensual
     session-plan.ts       el reparto plantilla/tramos — lo usan app y scripts
     generation/
       template.ts         escribe y cachea los bloques fijos
       script.ts           escribe el tramo personalizado
       tts.ts              ElevenLabs
-      audio.ts            mezcla con ffmpeg
+      audio.ts            mezcla con ffmpeg (y dónde encontrarlo)
       pipeline.ts         orquesta y persiste
+      dispatch.ts         en qué función corre y el encargo firmado
+      jobs.ts             tomar un job, registrar fallas, barrer colgados
+      health.ts           ¿este entorno puede generar? mezcla de prueba
     video/
       brand.ts            paleta, formatos y encuadre de cada pieza
       disc.ts             los cuadros del disco que respira, y la rejilla de la onda
@@ -495,6 +503,8 @@ src/
     offline/              lo que se ve sin red
   lib/version.ts          versión y hash del build
 scripts/                  CLI: setup, seed, generación, video, curaduría
+netlify/functions/        generación en segundo plano, salud y barrido
+tests/                    npm test
 .github/workflows/        las tandas automáticas
 supabase/migrations/      esquema
 design/                   el archivo original de Claude Design, como referencia
@@ -549,23 +559,83 @@ página, si lo que corre en el navegador es el último deploy.
 ## Despliegue
 
 El sitio está en Netlify con `@netlify/plugin-nextjs`. Las páginas, la sesión, el
-catálogo y el reproductor funcionan ahí sin más.
+catálogo y el reproductor corren en la función de Next.
 
-**La generación en vivo no corre en Netlify.** La mezcla usa `ffmpeg` y las
-funciones de Netlify (Lambda) no traen binarios. El pipeline lo comprueba antes
-de gastar en modelo y en síntesis, así que falla de inmediato y con mensaje claro
-en vez de a mitad de camino. Tres salidas, de menor a mayor esfuerzo:
+**La generación corre en otra función.** La de Next no sirve para eso por dos
+razones: en Lambda no hay `ffmpeg`, y una función síncrona de Netlify se corta a
+los 60 segundos contando lo que corre en `after()` — escribir el guion con el
+modelo y sintetizar la voz suele pasarse de eso, y la primera sesión de una
+intención (la que paga la plantilla) se pasa siempre. Así que:
 
-1. **Generar desde tu máquina** con `npm run generate`, que es como se arma el
-   catálogo y el canal de YouTube igual. La app en producción queda de lectura.
-2. **Incluir un ffmpeg estático** (`ffmpeg-static`, ~80 MB) en el bundle de la
-   función y apuntar `FFMPEG_PATH` al binario que instala.
-3. **Mover la generación a un worker** con ffmpeg disponible, y que la app solo
-   encole. Es lo que conviene si llega tráfico real: hoy la generación corre
-   dentro de la petición vía `after()`, que en serverless puede cortarse.
+```
+POST /api/meditations ──crea sesión y job──▶ /.netlify/functions/generate-background
+        │ responde de inmediato                 en segundo plano, hasta 15 min,
+        ▼                                       con ffmpeg-static empaquetado
+reproductor ──consulta──▶ /api/meditations/[id]/status
+```
 
-`netlify.toml` solo declara que `ELEVENLABS_MODEL_ID` no es un secreto — es el id
-público del modelo. El escaneo sigue activo para todas las demás claves.
+| Función (`netlify/functions/`) | Qué hace |
+|---|---|
+| `generate-background` | Genera la sesión. Recibe el encargo firmado (HMAC con la service role key), toma el job solo si sigue en cola —Netlify reintenta las invocaciones que fallan, y un reintento no puede volver a pagar modelo ni voz— y, si falla, lo registra y avisa. |
+| `generation-health` | `GET /.netlify/functions/generation-health` dice si este deploy puede generar: busca ffmpeg, **mezcla una sesión de prueba de verdad** y revisa las variables. 200 o 503. Corre sola después de cada deploy y avisa si algo falla. |
+| `reap-generations` | Cada 15 minutos da por fallidas las generaciones colgadas (la función se cortó, el encargo se perdió) y avisa. `/status` hace lo mismo con la sesión que alguien está esperando. |
+
+`netlify.toml` es lo que hace que ffmpeg llegue: deja `ffmpeg-static` fuera del
+bundle (para que su `__dirname` apunte al binario real) y lo suma con
+`included_files`. `next.config.ts` lo excluye de la función de Next, que no lo
+necesita. Al compilar en Netlify, `next.config.ts` fija que la app despache a la
+función en segundo plano; en local, `npm run dev` sigue generando en el mismo
+proceso. `GENERATION_RUNNER=inline|background` manda sobre las dos cosas.
+
+**Después de desplegar**, abre `/.netlify/functions/generation-health`: tiene que
+decir `"ok": true` y mostrar la ruta del ffmpeg de `node_modules/ffmpeg-static`.
+
+### Avisos
+
+Cada generación que falla, cada una que se queda colgada y cada deploy que no
+puede generar mandan un aviso con el error completo, la sesión, el paso en que se
+cortó y el deploy:
+
+- `ALERT_WEBHOOK_URL`: webhook entrante de Slack, Discord o Google Chat.
+- `RESEND_API_KEY` + `ALERT_EMAIL_TO` (+ `ALERT_EMAIL_FROM`): correo por Resend.
+
+Sin ninguno, el aviso queda en el log de la función con el prefijo
+`[omtana:alerta]`. Las variables van en Netlify con alcance **Functions**.
+
+La persona que generó no ve el error técnico: ve "No pudimos terminar tu sesión
+por un problema de nuestro lado…" y recupera lo cobrado. La excepción es cuando
+el modelo se niega a escribir con su contexto, que es lo único que ella puede
+arreglar.
+
+### Tests
+
+```bash
+npm test
+```
+
+Corren con el runner de Node (`node:test` vía `tsx`), sin dependencias extra, y
+en GitHub Actions en cada push y PR (`.github/workflows/tests.yml`, junto con
+tipos y lint). Lo que cuidan:
+
+- **La mezcla, con el ffmpeg de producción.** Arman sesiones de verdad con el
+  binario de `ffmpeg-static`, no con el del sistema: si una versión nueva pierde
+  un filtro o el codificador de MP3, se ve acá.
+- **Las funciones, empaquetadas como en Netlify.** esbuild, ESM, sin la condición
+  `react-server`, `ffmpeg-static` externo; después las cargan **sin ffmpeg en el
+  PATH y desde otra carpeta**, como en Lambda, y corren el chequeo de salud. Si
+  algo del motor vuelve a importar `"server-only"` o ffmpeg deja de encontrarse,
+  falla.
+- **`netlify.toml`.** Que las funciones que mezclan lleven el binario y que la
+  app despache a una función que existe.
+- **Avisos, despacho y jobs.** Que un canal caído no tape a los otros, que la
+  firma no se pueda falsificar, que un job corra una sola vez y que los colgados
+  se den por fallidos sin pisar a los que terminaron.
+
+Conviene que el comando de build de Netlify sea `npm test && npm run build`:
+así un deploy que no puede generar ni siquiera se publica.
+
+`netlify.toml` también declara que `ELEVENLABS_MODEL_ID` no es un secreto — es el
+id público del modelo. El escaneo sigue activo para todas las demás claves.
 
 ## Lo que queda por definir
 

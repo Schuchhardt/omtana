@@ -1,4 +1,4 @@
-import { db } from "./supabase";
+import { db } from "./supabase-client";
 
 export const AUDIO_BUCKET = "omtana-audio";
 

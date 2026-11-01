@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { db } from "../supabase";
+import { db } from "../supabase-client";
 import { uploadAudio } from "../storage";
 import { planSession, sectionMinutes, wordTarget, type PlannedSection } from "../session-plan";
 import { synthesize } from "./tts";

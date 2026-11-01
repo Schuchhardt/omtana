@@ -1,10 +1,11 @@
-import { db } from "../supabase";
+import { db } from "../supabase-client";
 import { downloadAudio, ensureBucket, uploadAudio } from "../storage";
 import { planSession } from "../session-plan";
 import { writeScript } from "./script";
 import { synthesize } from "./tts";
 import { assemble, ensureFfmpeg, type SegmentInput } from "./audio";
 import { ensureTemplate, PLAN_VERSION } from "./template";
+import { claimJob, failGeneration } from "./jobs";
 import { breathingSlotSeconds } from "../breathing";
 import type { BreathingRender, Intention, Meditation, MusicTrack, Voice } from "../types";
 
@@ -266,30 +267,34 @@ function slugify(text: string): string {
     .slice(0, 60) || "intencion";
 }
 
-/** Envuelve la generación marcando el job y el estado de la meditación. */
-export async function runGenerationJob(meditationId: string, jobId: string): Promise<void> {
-  await db()
-    .from("omtana_generation_jobs")
-    .update({ status: "running", started_at: new Date().toISOString() })
-    .eq("id", jobId);
-  await db()
-    .from("omtana_meditations")
-    .update({ status: "generating" })
-    .eq("id", meditationId);
+/**
+ * Envuelve la generación marcando el job y el estado de la meditación.
+ *
+ * Devuelve "skipped" si el job ya no estaba en cola: otra invocación lo tomó
+ * (Netlify reintenta las funciones en segundo plano) o el barrido lo dio por
+ * perdido. Si falla, queda registrado y sale el aviso al equipo antes de
+ * relanzar el error.
+ */
+export async function runGenerationJob(
+  meditationId: string,
+  jobId: string,
+): Promise<"done" | "skipped"> {
+  if (!(await claimJob(jobId))) return "skipped";
 
   try {
+    await db()
+      .from("omtana_meditations")
+      .update({ status: "generating" })
+      .eq("id", meditationId);
+
     await generateMeditation(meditationId);
     await db()
       .from("omtana_generation_jobs")
       .update({ status: "done", step: "listo", finished_at: new Date().toISOString() })
       .eq("id", jobId);
+    return "done";
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await db()
-      .from("omtana_generation_jobs")
-      .update({ status: "failed", error: message, finished_at: new Date().toISOString() })
-      .eq("id", jobId);
-    await db().from("omtana_meditations").update({ status: "failed" }).eq("id", meditationId);
+    await failGeneration({ meditationId, jobId, error: err });
     throw err;
   }
 }

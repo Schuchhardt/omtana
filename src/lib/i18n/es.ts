@@ -469,6 +469,8 @@ export const es = {
     preparing: "Preparando la sesión",
     readyNote: "Lista en menos de un minuto",
     failedFallback: "La generación falló.",
+    failedInternal: "No pudimos terminar tu sesión por un problema de nuestro lado. Ya nos llegó el aviso y lo estamos revisando.",
+    failedRefused: "El modelo no quiso escribir un guion con ese contexto. Prueba contándolo de otra manera.",
     refundNote: "Te devolvimos la personalización. Puedes volver a intentarlo.",
     retryCta: "Ajustar y reintentar",
     back15: "Retroceder 15 segundos",

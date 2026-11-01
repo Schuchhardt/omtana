@@ -42,6 +42,23 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
     NEXT_PUBLIC_BUILD_ID: resolveBuildId(),
+    /**
+     * Dónde corre la generación (ver `src/lib/generation/dispatch.ts`). En un
+     * build de Netlify, en la función en segundo plano: la de Next se corta a
+     * los 60 s y no trae ffmpeg. En el resto, en el mismo proceso.
+     * `GENERATION_RUNNER` en runtime manda sobre esto.
+     */
+    OMTANA_GENERATION_RUNNER:
+      process.env.GENERATION_RUNNER || (process.env.NETLIFY === "true" ? "background" : "inline"),
+  },
+
+  /**
+   * El ffmpeg estático (~80 MB) es solo para las funciones de netlify/functions,
+   * que lo suman por su cuenta (netlify.toml). La función de Next no mezcla
+   * audio en producción, así que no tiene por qué cargarlo.
+   */
+  outputFileTracingExcludes: {
+    "*": ["node_modules/ffmpeg-static/**"],
   },
 
   async headers() {

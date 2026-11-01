@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { PlannedSection } from "../session-plan";
 import { sectionMinutes, wordTarget } from "../session-plan";
 import { BECKWITH_LENS, HOUSE_STYLE, LANGUAGE } from "./style";
+import { SCRIPT_REFUSED } from "./errors";
 
 const MODEL = "claude-opus-5";
 
@@ -122,9 +123,8 @@ El texto va directo a síntesis de voz: sin encabezados, sin viñetas, sin acota
   });
 
   if (response.stop_reason === "refusal") {
-    throw new Error(
-      "El modelo no escribió este guion. Revisa el contexto entregado y vuelve a intentar.",
-    );
+    // Texto estable: es el único error que se le muestra a la persona (errors.ts).
+    throw new Error(SCRIPT_REFUSED);
   }
 
   const text = response.content.find((b) => b.type === "text");
