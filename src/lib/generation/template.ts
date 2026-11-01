@@ -19,11 +19,14 @@ const MODEL = "claude-opus-5";
  * (escena concreta, visionado al estilo Beckwith, imagen-ancla), y una plantilla
  * de la 3 mezclada con un tramo nuevo sonaría a dos meditaciones distintas. Una
  * plantilla vieja reutilizada en una sesión nueva pondría el audio equivocado
- * en cada tramo, y por eso la versión es parte de su identidad.
+ * en cada tramo, y por eso la versión es parte de su identidad. La 5 tampoco
+ * mueve tiempos: los bloques de la 4 nunca nombraban la intención (la dejaban
+ * adivinar en una escena), y la sesión entera sonaba a cualquier cosa menos a
+ * lo que la persona había pedido. Ahora la entrada y el refuerzo la dicen.
  */
-export const PLAN_VERSION = 4;
+export const PLAN_VERSION = 5;
 
-const SYSTEM = `Escribes los bloques fijos de las meditaciones de Omtana.
+export const TEMPLATE_SYSTEM = `Escribes los bloques fijos de las meditaciones de Omtana.
 
 Estos bloques se pregeneran una vez y se reutilizan para todas las personas que
 eligen la misma intención, así que no pueden mencionar ningún dato personal ni
@@ -35,9 +38,9 @@ ${HOUSE_STYLE}
 ${BECKWITH_LENS}
 
 Qué hace cada bloque:
-- Entrada al cuerpo: la persona llega a un lugar. No es un recorrido corporal genérico: es un sitio concreto elegido para esta intención (una orilla al amanecer, una cocina con la luz de la mañana, un banco bajo un árbol, un cuarto con la ventana abierta), con su luz, su temperatura y sus sonidos. El cuerpo se va apoyando ahí, de los pies a la cabeza, y cada zona que se nombra se ve tocando algo de la escena. Termina con la persona sentada o acostada dentro del lugar, quieta, lista para que el tramo personalizado la lleve más adentro.
-- Refuerzo e imágenes: el visionado. Retoma el mismo lugar de la entrada, con las mismas palabras, y lo abre: la persona ve la versión más alta de esta intención como escena que ya está sucediendo. Qué ve, qué hace, quién es ahí. Las preguntas de visionado de a una, con silencio después de cada una. Un gesto de gratitud por lo que ya circula. Se cierra con una imagen-ancla nombrada dos veces.
-- Cierre: vuelta gradual. La imagen-ancla se guarda, el cuerpo vuelve a la silla o la cama, entran los sonidos reales de la habitación, los ojos se abren. Sin promesas y sin tarea para mañana. Si la intención es para dormir, no hay vuelta ni ojos: las frases se acortan hasta apagarse.
+- Entrada al cuerpo: abre nombrando para qué es esta sesión, en una o dos frases simples: la intención dicha tal cual, con palabras de todos los días (por ejemplo: "Esta sesión es para dormir sin dar vueltas."). Recién después, la persona llega a un lugar. No es un recorrido corporal genérico: es un sitio concreto elegido para esta intención (una orilla al amanecer, una cocina con la luz de la mañana, un banco bajo un árbol, un cuarto con la ventana abierta), con su luz, su temperatura y sus sonidos. El cuerpo se va apoyando ahí, de los pies a la cabeza, y cada zona que se nombra se ve tocando algo de la escena. Termina con la persona sentada o acostada dentro del lugar, quieta, lista para que el tramo personalizado la lleve más adentro.
+- Refuerzo e imágenes: el visionado. Vuelve a nombrar la intención con las mismas palabras de la entrada, retoma el mismo lugar y lo abre: la persona ve la versión más alta de esta intención como escena que ya está sucediendo, y se dice qué es lo que está viendo cumplirse. Qué ve, qué hace, quién es ahí. Las preguntas de visionado de a una, con silencio después de cada una. Un gesto de gratitud por lo que ya circula. Se cierra con una imagen-ancla nombrada dos veces.
+- Cierre: vuelta gradual. La imagen-ancla se guarda junto con la intención, nombrada una última vez, el cuerpo vuelve a la silla o la cama, entran los sonidos reales de la habitación, los ojos se abren. Sin promesas y sin tarea para mañana. Si la intención es para dormir, no hay vuelta ni ojos: las frases se acortan hasta apagarse.
 
 La sesión abre con un ejercicio de respiración guiado que no escribes tú: va en
 una pista aparte, con su propio reloj. Tu primer bloque entra justo después, con
@@ -87,7 +90,7 @@ async function writeFixedSections(
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 12000,
-    system: SYSTEM,
+    system: TEMPLATE_SYSTEM,
     thinking: { type: "adaptive" },
     output_config: { effort: "medium", format: { type: "json_schema", schema } },
     messages: [
@@ -99,7 +102,9 @@ Intención de esta plantilla: "${localized(intention, locale, "title")}".
 ${localized(intention, locale, "brief") || localized(intention, locale, "summary")}
 
 Elige un solo lugar para esta intención y úsalo en todos los bloques, con las
-mismas palabras cada vez que aparece.
+mismas palabras cada vez que aparece. Nombra la intención con claridad en la
+entrada y en el refuerzo: quien escucha tiene que saber de qué se trata su
+sesión sin adivinarlo.
 
 Escribe estas secciones:
 ${brief}

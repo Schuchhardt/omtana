@@ -6,6 +6,7 @@ import { synthesize } from "./tts";
 import { assemble, ensureFfmpeg, type SegmentInput } from "./audio";
 import { ensureTemplate, PLAN_VERSION } from "./template";
 import { claimJob, failGeneration } from "./jobs";
+import { notifyAdmin } from "../alerts";
 import { breathingSlotSeconds } from "../breathing";
 import type { BreathingRender, Intention, Meditation, MusicTrack, Voice } from "../types";
 
@@ -126,13 +127,37 @@ export async function generateMeditation(
 
   /* 2 ─ Guion del tramo personalizado. */
   await step("guion");
+  // El tramo lee lo que suena antes y después para seguir en el mismo lugar:
+  // sin eso inventaba otro y sonaba a una meditación distinta metida en medio.
+  const firstDynamic = plan.find((s) => s.kind === "dynamic");
+  const around = (position: number | undefined) => {
+    const row = sections.find((s) => s.position === position);
+    return row?.script_text ? { label: row.label, text: row.script_text } : null;
+  };
   const script = await writeScript({
     intention: meditation.intention_text,
     context: meditation.context_text,
     locale: meditation.locale,
     voiceName: voice.name,
     sections: plan,
+    surrounding: firstDynamic
+      ? { before: around(firstDynamic.position - 1), after: around(firstDynamic.position + 1) }
+      : undefined,
   });
+
+  if (!script.grounding.ok) {
+    // Dos intentos y el tramo sigue sin nombrar lo que la persona pidió. Se
+    // genera igual —fallar no le da nada—, pero alguien tiene que mirarlo.
+    await notifyAdmin({
+      title: "Una meditación salió sin nombrar lo que pidió la persona",
+      detail: script.grounding.problems.join("\n"),
+      fields: {
+        meditación: meditationId,
+        anclas: script.anchors.join(" · ") || "ninguna",
+        intentos: script.attempts,
+      },
+    });
+  }
 
   /* 3 ─ Síntesis de voz, solo de lo nuevo. */
   const inputs: SegmentInput[] = [];
