@@ -6,6 +6,7 @@ import { synthesize } from "./tts";
 import { assemble, ensureFfmpeg, type SegmentInput } from "./audio";
 import { ensureTemplate, PLAN_VERSION } from "./template";
 import { claimJob, failGeneration } from "./jobs";
+import { notifyAdmin } from "../alerts";
 import { breathingSlotSeconds } from "../breathing";
 import { logEvent, withTrace } from "../telemetry";
 import { scriptAsPlainText, splitScript } from "./custom-script";
@@ -171,6 +172,13 @@ async function generateLoaded(meditation: LoadedMeditation, opts: GenerateOption
 
   /* 2 ─ Guion del tramo personalizado: lo escribe el modelo, o lo trajo la persona. */
   await step("guion");
+  // El tramo lee lo que suena antes y después para seguir en el mismo lugar:
+  // sin eso inventaba otro y sonaba a una meditación distinta metida en medio.
+  const firstDynamic = plan.find((s) => s.kind === "dynamic");
+  const around = (position: number | undefined) => {
+    const row = sections.find((s) => s.position === position);
+    return row?.script_text ? { label: row.label, text: row.script_text } : null;
+  };
   const script =
     meditation.script_mode === "tramo" && meditation.script_override?.trim()
       ? ownSegment(meditation, plan)
@@ -180,7 +188,24 @@ async function generateLoaded(meditation: LoadedMeditation, opts: GenerateOption
           locale: meditation.locale,
           voiceName: voice.name,
           sections: plan,
+          surrounding: firstDynamic
+            ? { before: around(firstDynamic.position - 1), after: around(firstDynamic.position + 1) }
+            : undefined,
         });
+
+  if (!script.grounding.ok) {
+    // Dos intentos y el tramo sigue sin nombrar lo que la persona pidió. Se
+    // genera igual —fallar no le da nada—, pero alguien tiene que mirarlo.
+    await notifyAdmin({
+      title: "Una meditación salió sin nombrar lo que pidió la persona",
+      detail: script.grounding.problems.join("\n"),
+      fields: {
+        meditación: meditationId,
+        anclas: script.anchors.join(" · ") || "ninguna",
+        intentos: script.attempts,
+      },
+    });
+  }
 
   /* 3 ─ Síntesis de voz, solo de lo nuevo. */
   const inputs: SegmentInput[] = [];
@@ -283,6 +308,10 @@ function ownSegment(meditation: Meditation, plan: ReturnType<typeof planSession>
     title: meditation.title,
     segments: { [dynamic.position]: scriptAsPlainText(meditation.script_override ?? "") },
     keywords: [],
+    // El texto es de la persona: no hay anclas que verificar ni nada que avisar.
+    anchors: [],
+    grounding: { ok: true, spoken: [], problems: [] },
+    attempts: 0,
   };
 }
 

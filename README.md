@@ -112,6 +112,17 @@ pero lo normal es generar la sesión seca.
 Lo que generas desde el CLI va al catálogo público: no tiene usuario dueño, así
 que dejarlo privado lo volvería invisible. `--privada` existe igual, con aviso.
 
+**El tramo personalizado nombra lo que la persona pidió y contó, con sus
+palabras**, desde las primeras frases y a lo largo de todo el tramo; la escena lo
+acompaña, no lo reemplaza. Antes de escribir, el modelo declara sus *anclas*
+(los elementos concretos de lo que la persona escribió) y
+`src/lib/generation/grounding.ts` comprueba, sin modelo, que estén dichas y que
+alguna suene al comienzo. Si no, se reescribe una vez diciéndole qué faltó; si
+sigue sin hacerlo, la sesión sale igual y llega un aviso. El tramo además recibe
+el texto de los bloques de la plantilla que suenan antes y después, para seguir
+en el mismo lugar. Los bloques fijos nombran la intención en la entrada y en el
+refuerzo (plantillas versión 5: las de la 4 no lo hacían y no se reutilizan).
+
 La primera meditación de una intención paga la plantilla (bloques fijos escritos
 y sintetizados una vez). Las siguientes con esa misma intención, duración, idioma
 y voz reutilizan ese audio y solo generan el tramo personalizado.
@@ -734,6 +745,9 @@ tipos y lint). Lo que cuidan:
   falla.
 - **`netlify.toml`.** Que las funciones que mezclan lleven el binario y que la
   app despache a una función que existe.
+- **Que la sesión hable de la persona.** El prompt del tramo pide nombrar lo
+  suyo, recibe lo que suena alrededor, y un tramo que no lo nombra se reescribe
+  (con un modelo de mentira: no gasta API).
 - **Avisos, despacho y jobs.** Que un canal caído no tape a los otros, que la
   firma no se pueda falsificar, que un job corra una sola vez y que los colgados
   se den por fallidos sin pisar a los que terminaron.

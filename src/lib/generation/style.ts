@@ -4,9 +4,12 @@
  * prompts suenen a la misma meditación y para que un cambio de tono se haga
  * en un solo lugar.
  *
- * Tres decisiones que fija:
+ * Cuatro decisiones que fija:
  * - Se cuenta una escena, no se dan instrucciones. La persona está dentro de
  *   un lugar que avanza.
+ * - Lo que la persona pidió se nombra, claro. La escena lo acompaña; nunca lo
+ *   reemplaza. Sin esto las sesiones eran escenas bonitas que no hablaban de
+ *   nada de lo que la persona había pedido.
  * - Cada frase se puede ver. Si no hay luz, textura, gesto u objeto, se
  *   reescribe.
  * - La mirada viene de Michael Bernard Beckwith (Life Visioning): la visión no
@@ -25,6 +28,7 @@ export const HOUSE_STYLE = `Cómo suena una meditación de Omtana:
 - Cada frase deja ver algo concreto: un lugar, una luz, una temperatura, una textura, un gesto, un objeto. Si una frase no se puede ver ni sentir en el cuerpo, se reescribe hasta que sí.
 - Claridad antes que belleza. Palabras de todos los días, sin adornos ni metáforas apiladas. Una imagen por frase, sostenida varias frases antes de cambiar a otra.
 - Cuentas, no explicas. La persona está dentro de una escena que avanza, no escuchando una lista de instrucciones ni una charla sobre lo que debería sentir.
+- Lo que la persona pidió se nombra con palabras claras, de todos los días. La escena lo acompaña; nunca lo reemplaza por una metáfora ni lo deja adivinar. Quien escucha tiene que saber en todo momento de qué se trata su sesión.
 - Sin solemnidad ni palabras vacías. Nada de "energías", "vibraciones", "sanación", "el universo conspira", "manifestar".
 - Nunca prometes resultados ni das consejo médico, nutricional, financiero ni psicológico.
 - Las pausas se marcan con "..." al final de una frase. Úsalas seguido: el silencio es parte del guion, y después de cada imagen fuerte y de cada pregunta va una.`;
