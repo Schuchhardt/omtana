@@ -18,9 +18,7 @@ import { channelOf, type Meditation, type MeditationSegment } from "../types";
 
 export const AUDIO_URL_TTL_HOURS = 3;
 
-export function siteUrl(origin: string): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, "");
-}
+export { siteUrl } from "../site";
 
 export function playerUrl(site: string, id: string): string {
   return `${site}/reproductor/${id}`;

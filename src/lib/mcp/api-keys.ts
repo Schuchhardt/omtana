@@ -43,7 +43,12 @@ export async function createApiKey(
     throw new Error(`Ya tienes ${MAX_KEYS_PER_USER} llaves activas. Revoca alguna antes de crear otra.`);
   }
 
-  const key = `${KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
+  // Los tokens OAuth también empiezan con "omt_" (omt_at_, omt_rt_, omt_ac_):
+  // una llave que por azar empezara igual se confundiría con uno.
+  let key: string;
+  do {
+    key = `${KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
+  } while (/^omt_(at|rt|ac)_/.test(key));
   const { data, error } = await db()
     .from("omtana_api_keys")
     .insert({

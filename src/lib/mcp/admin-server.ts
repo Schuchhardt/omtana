@@ -4,9 +4,12 @@ import { db } from "../supabase";
 import { APP_VERSION } from "../version";
 import { logEvent } from "../telemetry";
 import { isStale, reapStaleJobs } from "../generation/jobs";
-import { isAdminToken, revokeApiKey } from "./api-keys";
+import { bearerToken, isAdminToken, revokeApiKey } from "./api-keys";
+import { challengeFor, userFromAccessToken } from "./oauth-auth";
+import { isAccessToken, isAdminEmail } from "../oauth/core";
+import { siteUrl } from "../site";
 import { allowedOrigins } from "./origins";
-import { defineTool, ToolError, type McpServer } from "./protocol";
+import { AuthFailure, defineTool, ToolError, type McpServer } from "./protocol";
 import { describeCatalog, loadCatalog } from "../meditations/catalog";
 import { enqueueGeneration } from "../meditations/create";
 import {
@@ -45,6 +48,8 @@ import type { Meditation, User } from "../types";
 export interface AdminContext {
   origin: string;
   site: string;
+  /** Quién: el email del admin (OAuth) o "token" (OMTANA_ADMIN_MCP_TOKEN). */
+  actor: string;
 }
 
 const tool = defineTool<AdminContext>();
@@ -93,8 +98,8 @@ const adminFields = {
   reason: z.string().trim().max(300).optional().describe("Por qué se crea (queda en la bitácora)."),
 };
 
-async function audit(message: string, data: Record<string, unknown>) {
-  await logEvent({ source: "mcp:admin", level: "info", message, data, trace: { via: "admin" } });
+async function audit(ctx: AdminContext, message: string, data: Record<string, unknown>) {
+  await logEvent({ source: "mcp:admin", level: "info", message, data: { actor: ctx.actor, ...data }, trace: { via: "admin" } });
 }
 
 /* ───────────────────────────── plataforma ───────────────────────────── */
@@ -233,9 +238,9 @@ const reap = tool({
   description: "Da por fallidos ahora los jobs que nadie va a terminar (lo mismo que corre cada 15 minutos), con aviso al equipo. Lo cobrado se devuelve cuando se consulta la sesión.",
   input: z.object({}),
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  async run() {
+  async run(_args, ctx) {
     const reaped = await reapStaleJobs();
-    await audit("barrido manual de jobs", { reaped: reaped.length });
+    await audit(ctx, "barrido manual de jobs", { reaped: reaped.length });
     return { reaped: reaped.length, jobs: reaped };
   },
 });
@@ -255,7 +260,7 @@ const retry = tool({
     }
     await db().from("omtana_meditations").update({ status: "pending" }).eq("id", meditation.id);
     const { jobId } = await enqueueGeneration(meditation.id, ctx.origin);
-    await audit("reintento de generación", { meditation: meditation.id, job: jobId, reason: args.reason });
+    await audit(ctx, "reintento de generación", { meditation: meditation.id, job: jobId, reason: args.reason });
     return { meditation_id: meditation.id, job_id: jobId, player_url: playerUrl(ctx.site, meditation.id) };
   },
 });
@@ -335,9 +340,9 @@ const revokeKey = tool({
   description: "Revoca una llave MCP de cualquier persona (por id). Deja de funcionar al instante.",
   input: z.object({ key_id: z.string().uuid(), reason: z.string().trim().min(3).max(300) }),
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-  async run(args) {
+  async run(args, ctx) {
     const revoked = await revokeApiKey(args.key_id);
-    await audit("llave revocada por admin", { key: args.key_id, revoked, reason: args.reason });
+    await audit(ctx, "llave revocada por admin", { key: args.key_id, revoked, reason: args.reason });
     return { key_id: args.key_id, revoked };
   },
 });
@@ -418,7 +423,7 @@ const createWithParams = tool({
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   async run(args, ctx) {
     const result = await fromParams(await actionContext(ctx, args.for_user, args.charge), args);
-    await audit("meditación creada por admin", { tool: "create_meditation", for_user: args.for_user ?? null, reason: args.reason ?? null, meditation: (result.meditation as { id?: string }).id });
+    await audit(ctx, "meditación creada por admin", { tool: "create_meditation", for_user: args.for_user ?? null, reason: args.reason ?? null, meditation: (result.meditation as { id?: string }).id });
     return result;
   },
 });
@@ -432,7 +437,7 @@ const createWithScript = tool({
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   async run(args, ctx) {
     const result = await fromScript(await actionContext(ctx, args.for_user, args.charge), args);
-    await audit("meditación creada por admin", { tool: "create_meditation_from_script", for_user: args.for_user ?? null, reason: args.reason ?? null, meditation: (result.meditation as { id?: string }).id });
+    await audit(ctx, "meditación creada por admin", { tool: "create_meditation_from_script", for_user: args.for_user ?? null, reason: args.reason ?? null, meditation: (result.meditation as { id?: string }).id });
     return result;
   },
 });
@@ -446,7 +451,7 @@ const createFromPrompt = tool({
   async run(args, ctx) {
     const result = await fromPrompt(await actionContext(ctx, args.for_user, args.charge), args);
     if (!args.dry_run) {
-      await audit("meditación creada por admin", { tool: "generate_from_prompt", for_user: args.for_user ?? null, reason: args.reason ?? null });
+      await audit(ctx, "meditación creada por admin", { tool: "generate_from_prompt", for_user: args.for_user ?? null, reason: args.reason ?? null });
     }
     return result;
   },
@@ -490,17 +495,34 @@ export const adminServer: McpServer<AdminContext> = {
     createFromPrompt,
   ],
   allowedOrigins: allowedOrigins(),
+  /**
+   * Dos credenciales: el token fijo `OMTANA_ADMIN_MCP_TOKEN` (scripts, Claude
+   * Code) o un access token OAuth emitido para este MCP a una persona cuyo
+   * email está en `OMTANA_ADMIN_EMAILS`. La lista se mira en cada petición.
+   */
   async authenticate(request) {
-    if (!isAdminToken(request)) return null;
     const origin = new URL(request.url).origin;
-    return { origin, site: (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, "") };
+    const site = siteUrl(origin);
+    if (isAdminToken(request)) return { origin, site, actor: "token" };
+
+    const token = bearerToken(request);
+    if (!token) return null;
+    if (!isAccessToken(token)) return new AuthFailure("invalid", "Credencial de administración inválida.");
+
+    const auth = await userFromAccessToken(request, token, "admin");
+    if (auth instanceof AuthFailure) return auth;
+    if (!isAdminEmail(auth.user.email)) {
+      return new AuthFailure("forbidden", "Esta cuenta ya no tiene acceso de administración.");
+    }
+    return { origin, site, actor: auth.user.email };
   },
+  challenge: (request) => challengeFor(request, "admin"),
   async onCall(info) {
     await logEvent({
       level: info.ok ? "info" : "warn",
       source: "mcp:admin",
       message: `${info.tool} ${info.ok ? "ok" : "falló"}`,
-      data: { tool: info.tool, ms: info.ms, args: info.argKeys, error: info.error ?? null },
+      data: { tool: info.tool, ms: info.ms, args: info.argKeys, error: info.error ?? null, actor: info.ctx.actor },
       trace: { via: "admin" },
     });
   },

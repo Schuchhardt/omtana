@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listVoices, userStats } from "@/lib/queries";
 import { listApiKeys } from "@/lib/mcp/api-keys";
+import { listGrants } from "@/lib/oauth/store";
 import { siteUrl } from "@/lib/meditations/view";
 import { headers } from "next/headers";
 import { paymentsEnabled } from "@/lib/payments";
@@ -23,11 +24,13 @@ export default async function PerfilPage() {
   const user = await currentUser();
   if (!user) redirect("/acceso");
 
-  const [voices, stats, lang, keys, requestHeaders] = await Promise.all([
+  const [voices, stats, lang, keys, grants, requestHeaders] = await Promise.all([
     listVoices(),
     userStats(user.id),
     getLang(),
     listApiKeys(user.id),
+    // Sin la migración 0009 la tabla no existe: la sección queda vacía.
+    listGrants(user.id).catch(() => []),
     headers(),
   ]);
 
@@ -89,6 +92,13 @@ export default async function PerfilPage() {
         <McpKeys
           endpoint={mcpEndpoint}
           t={t.mcp}
+          apps={grants.map((grant) => ({
+            id: grant.id,
+            name: grant.client_name,
+            detail:
+              fill(t.mcp.appDetail, { date: formatLongDate(grant.created_at, lang) }) +
+              (grant.resource.endsWith("/admin") ? ` · ${t.mcp.appAdmin}` : ""),
+          }))}
           keys={keys.map((key) => ({
             id: key.id,
             name: key.name,

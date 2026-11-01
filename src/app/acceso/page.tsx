@@ -7,6 +7,7 @@ import { currentUser } from "@/lib/auth";
 import { getLang } from "@/lib/lang";
 import { publicMetadata } from "@/lib/seo";
 import { copy } from "@/lib/i18n";
+import { safeNext } from "@/lib/safe-next";
 
 export async function generateMetadata(): Promise<Metadata> {
   const lang = await getLang();
@@ -20,18 +21,19 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AccesoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ modo?: string }>;
+  searchParams: Promise<{ modo?: string; next?: string }>;
 }) {
-  if (await currentUser()) redirect("/home");
+  const [{ modo, next: rawNext }, lang] = await Promise.all([searchParams, getLang()]);
+  const next = safeNext(rawNext);
+  if (await currentUser()) redirect(next ?? "/home");
 
-  const [{ modo }, lang] = await Promise.all([searchParams, getLang()]);
   const mode = modo === "crear" ? "crear" : "entrar";
   const t = copy(lang).access;
 
 
   return (
     <main className="om-shell grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-center gap-16 pb-24 pt-16">
-      <AuthForm mode={mode} t={t} lang={lang} />
+      <AuthForm mode={mode} t={t} lang={lang} next={next} />
 
       <div className="w-full max-w-[460px] justify-self-center">
         <BreathCircle>

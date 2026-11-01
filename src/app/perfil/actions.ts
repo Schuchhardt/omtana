@@ -101,6 +101,16 @@ export async function createMcpKey(name: unknown) {
   }
 }
 
+export async function disconnectApp(grantId: unknown) {
+  const user = await requireUser();
+  const id = z.string().uuid().safeParse(grantId);
+  if (!id.success) return { ok: false };
+  const { revokeGrantFor } = await import("@/lib/oauth/store");
+  const ok = await revokeGrantFor(user.id, id.data);
+  revalidatePath("/perfil");
+  return { ok };
+}
+
 export async function revokeMcpKey(keyId: unknown) {
   const user = await requireUser();
   const id = z.string().uuid().safeParse(keyId);

@@ -476,19 +476,25 @@ misma sesión dos veces, porque las dos verían el mismo hueco.
 ## MCP: asistentes
 
 Dos servidores [MCP](https://modelcontextprotocol.io) para que Claude (o cualquier
-cliente MCP) use Omtana. Los dos son **Streamable HTTP sin estado** — JSON-RPC por
-POST, sin sesiones ni SSE — porque corren en la función de Netlify, que nace y
-muere en cada petición. El protocolo está escrito a mano en
-`src/lib/mcp/protocol.ts` (unas 300 líneas, con zod para validar y para el JSON
-Schema de cada herramienta) y probado contra el cliente oficial del SDK.
+cliente MCP) use Omtana, con **OAuth**: en claude.ai se agregan como conector con
+la URL y un botón "Conectar", sin copiar llaves.
+
+Los dos son **Streamable HTTP sin estado**, porque corren en la función de
+Netlify, que nace y muere en cada petición. Hablan las dos eras del protocolo:
+la **2026-07-28** (sin `initialize`, versión en `_meta`, `server/discover`,
+cabeceras `Mcp-Method`/`Mcp-Name`) y la **2025-11-25 y anteriores** (con
+`initialize`), que es la que siguen usando la mayoría de los clientes y el SDK
+oficial. El protocolo está escrito a mano en `src/lib/mcp/protocol.ts`, con zod
+para validar y para el JSON Schema de cada herramienta, y se prueba contra el
+cliente oficial del SDK.
 
 | Servidor | URL | Credencial |
 |---|---|---|
-| Personas | `/api/mcp` | `Authorization: Bearer omt_…`, una llave por persona, creada en **/perfil → Asistentes (MCP)** |
-| Admin | `/api/mcp/admin` | `Authorization: Bearer $OMTANA_ADMIN_MCP_TOKEN` |
+| Personas | `/api/mcp` | OAuth (scope `meditations`), o una llave `omt_…` creada en **/perfil → Asistentes (MCP)** para clientes sin OAuth |
+| Admin | `/api/mcp/admin` | OAuth (scope `admin`) para los emails de `OMTANA_ADMIN_EMAILS`, o `Bearer $OMTANA_ADMIN_MCP_TOKEN` |
 
-Necesita la migración `0008` (`npm run db:push -- --solo 0008`): llaves, uso y
-costos, bitácora y las columnas de guion propio.
+Necesita las migraciones `0008` (llaves, uso y costos, bitácora, guion propio) y
+`0009` (OAuth): `npm run db:push -- --solo 0008` y `-- --solo 0009`.
 
 ### El de las personas
 
@@ -532,19 +538,62 @@ salvo `charge: true`), más la vista de la plataforma:
 
 ### Conectarlo
 
+**claude.ai / Claude Desktop**: Configuración → Conectores → *Agregar conector
+personalizado* → `https://omtana.com/api/mcp` (o `/api/mcp/admin`) → Conectar.
+Se abre Omtana, la persona inicia sesión, ve qué va a poder hacer la app y a
+dónde vuelve, y aprueba.
+
 ```bash
-# Claude Code
+# Claude Code: hace OAuth solo la primera vez que se usa (/mcp para autenticar)
+claude mcp add --transport http omtana https://omtana.com/api/mcp
+
+# o con llave / token fijo, para scripts y clientes sin OAuth
 claude mcp add --transport http omtana https://omtana.com/api/mcp \
   --header "Authorization: Bearer omt_…"
 claude mcp add --transport http omtana-admin https://omtana.com/api/mcp/admin \
   --header "Authorization: Bearer $OMTANA_ADMIN_MCP_TOKEN"
 ```
 
-Con la API de Mensajes, el conector MCP recibe la llave en `authorization_token`.
-Los clientes que solo hablan stdio pueden usar `npx mcp-remote <url> --header
-"Authorization: Bearer …"`. Los conectores personalizados de claude.ai piden
-OAuth, que estos servidores todavía no implementan: es el siguiente paso si se
-quiere ofrecer "Conectar con Claude" sin copiar una llave.
+Con la API de Mensajes, el conector MCP recibe un token (OAuth o llave) en
+`authorization_token`. Las apps conectadas se ven y se desconectan en /perfil.
+
+### OAuth
+
+Omtana es su propio servidor de autorización OAuth 2.1 (`src/lib/oauth/`),
+según la especificación de autorización MCP 2026-07-28:
+
+| Pieza | Dónde |
+|---|---|
+| Metadata del recurso (RFC 9728) | `/.well-known/oauth-protected-resource/api/mcp` y `…/api/mcp/admin`; el 401 de cada MCP la anuncia en `WWW-Authenticate` con su `scope` |
+| Metadata del servidor (RFC 8414) | `/.well-known/oauth-authorization-server` |
+| Consentimiento | `/oauth/authorize`: pide sesión (vuelve de `/acceso` con `next`), muestra la app, a qué host vuelve (advierte si es `localhost`) y qué podrá hacer; no se puede embeber en un iframe |
+| Token | `/api/oauth/token`: código con **PKCE S256 obligatorio**, de un solo uso y 10 minutos; access token de 1 hora; refresh token de 60 días que **rota en cada uso** |
+| Registro | **Client ID Metadata Documents** (el `client_id` es la URL de su documento; lo recomendado) y registro dinámico `/api/oauth/register` (RFC 7591, deprecado pero lo que usan muchos clientes; 20 por hora por IP) |
+| Revocación | `/api/oauth/revoke` (RFC 7009) y "Desconectar" en /perfil |
+
+Las decisiones de seguridad que vale la pena saber:
+
+- **Audiencia (RFC 8707).** Cada token sirve para un solo MCP: uno emitido para
+  `/api/mcp` no abre `/api/mcp/admin`. Se valida en cada petición.
+- **Admin por email.** Solo quien está en `OMTANA_ADMIN_EMAILS` puede aprobar
+  el MCP de admin, y la lista se vuelve a mirar en cada petición: sacar a
+  alguien le corta el acceso al tiro (403 `insufficient_scope`).
+- **Reuso = robo.** Un código o un refresh token que aparece dos veces revoca
+  el permiso entero.
+- **`iss` en la vuelta** (RFC 9207) contra ataques de mezcla de servidores.
+- **Redirect URIs exactos**, solo https o loopback (en loopback se acepta
+  cualquier puerto, RFC 8252). Un error antes de validar el redirect se muestra
+  en Omtana, nunca se redirige: no es un redirector abierto.
+- **SSRF.** Para leer un Client ID Metadata Document: solo https y dominios
+  (nada de IPs), sin redirecciones, 5 s y 64 KB de tope, y la IP se valida en
+  la conexión misma (contra DNS rebinding): loopback, redes privadas,
+  link-local y metadata de la nube quedan fuera.
+- Igual que sesiones y llaves, de cada código y token se guarda el sha256.
+
+`tests/oauth-sdk.test.mts` levanta un servidor con los mismos handlers y hace
+que el cliente oficial del SDK de MCP recorra el flujo completo: 401 →
+descubrimiento → registro → autorización con PKCE y `resource` → canje → MCP →
+refresh con rotación → reuso detectado.
 
 ### Costos y trazas
 
@@ -582,8 +631,13 @@ src/
     auth.ts               sesiones propias, scrypt, cupo mensual
     telemetry.ts          trazas: uso y costo por llamada, bitácora (AsyncLocalStorage)
     pricing.ts            precios por modelo y por caracter, con fecha
+    oauth/
+      core.ts             OAuth 2.1: metadata, PKCE, códigos, tokens, audiencia
+      handlers.ts         endpoints como Request → Response, con el store inyectado
+      cimd.ts             Client ID Metadata Documents, con protección SSRF
+      store.ts            el store sobre Supabase
     mcp/
-      protocol.ts         MCP Streamable HTTP sin estado (JSON-RPC por POST)
+      protocol.ts         MCP Streamable HTTP sin estado, eras 2026-07-28 y legada
       user-server.ts      herramientas de /api/mcp
       admin-server.ts     herramientas de /api/mcp/admin
       api-keys.ts         llaves omt_ por persona (solo el hash en la base)

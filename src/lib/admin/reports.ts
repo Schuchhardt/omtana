@@ -498,6 +498,9 @@ const TABLES = [
   "omtana_leads",
   "omtana_usage_events",
   "omtana_logs",
+  "omtana_oauth_clients",
+  "omtana_oauth_grants",
+  "omtana_oauth_tokens",
 ];
 
 const OPTIONAL_ENV = [
@@ -508,6 +511,7 @@ const OPTIONAL_ENV = [
   "ZERNIO_API_KEY",
   "YOUTUBE_REFRESH_TOKEN",
   "OMTANA_ADMIN_MCP_TOKEN",
+  "OMTANA_ADMIN_EMAILS",
   "OMTANA_PROMPT_MODEL",
   "ELEVENLABS_USD_PER_1K_CHARS",
   "MCP_ALLOWED_ORIGINS",
@@ -539,8 +543,9 @@ export async function architecture(site: string) {
     ],
     components: [
       { name: "App Next.js", where: "src/app", does: "páginas, sesión propia con cookie, API de generación, reproductor" },
-      { name: "MCP usuarios", where: "/api/mcp (src/lib/mcp/user-server.ts)", does: "crear con parámetros, con guion o desde prompt; estado y links. Llave omt_ por persona." },
-      { name: "MCP admin", where: "/api/mcp/admin (src/lib/mcp/admin-server.ts)", does: "todo lo anterior para cualquier cuenta + arquitectura, logs, errores, trazas y costos. OMTANA_ADMIN_MCP_TOKEN." },
+      { name: "MCP usuarios", where: "/api/mcp (src/lib/mcp/user-server.ts)", does: "crear con parámetros, con guion o desde prompt; estado y links. OAuth o llave omt_ por persona." },
+      { name: "MCP admin", where: "/api/mcp/admin (src/lib/mcp/admin-server.ts)", does: "todo lo anterior para cualquier cuenta + arquitectura, logs, errores, trazas y costos. OAuth para OMTANA_ADMIN_EMAILS u OMTANA_ADMIN_MCP_TOKEN." },
+      { name: "OAuth 2.1", where: "src/lib/oauth + /.well-known + /api/oauth/* + /oauth/authorize", does: "servidor de autorización de los MCP: PKCE, audiencia por MCP, refresh con rotación, CIMD y registro dinámico" },
       { name: "Motor de generación", where: "src/lib/generation", does: "plantillas, guion, voz, mezcla, jobs" },
       { name: "generate-background", where: "netlify/functions", does: "genera en segundo plano con ffmpeg" },
       { name: "generation-health", where: "netlify/functions", does: "mezcla de prueba y variables; corre tras cada deploy" },

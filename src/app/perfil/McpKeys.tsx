@@ -2,8 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createMcpKey, revokeMcpKey } from "./actions";
+import { createMcpKey, disconnectApp, revokeMcpKey } from "./actions";
 import type { Copy } from "@/lib/i18n";
+
+export interface ConnectedApp {
+  id: string;
+  name: string;
+  /** "conectada octubre de 2026 · administración": se arma en el servidor. */
+  detail: string;
+}
 
 export interface McpKeyItem {
   id: string;
@@ -20,10 +27,12 @@ export interface McpKeyItem {
  */
 export function McpKeys({
   keys,
+  apps = [],
   endpoint,
   t,
 }: {
   keys: McpKeyItem[];
+  apps?: ConnectedApp[];
   endpoint: string;
   t: Copy["profile"]["mcp"];
 }) {
@@ -54,6 +63,15 @@ export function McpKeys({
     });
   }
 
+  function disconnect(id: string) {
+    setRevoking(id);
+    startTransition(async () => {
+      await disconnectApp(id);
+      setRevoking(null);
+      router.refresh();
+    });
+  }
+
   function revoke(id: string) {
     setRevoking(id);
     startTransition(async () => {
@@ -80,7 +98,36 @@ export function McpKeys({
       <div className="mb-6">
         <div className="mb-[6px] text-[13px] text-faint">{t.endpoint}</div>
         <code className="block overflow-x-auto rounded-card border border-line px-4 py-3 text-[14px]">{endpoint}</code>
+        <p className="mt-3 max-w-[720px] text-[14px] leading-[1.55] text-muted">{t.oauthHowTo}</p>
       </div>
+
+      <div className="mb-8">
+        <div className="mb-2 text-[15px]">{t.appsTitle}</div>
+        {apps.length === 0 ? (
+          <p className="text-[14px] text-faint">{t.appsEmpty}</p>
+        ) : (
+          <ul className="flex flex-col">
+            {apps.map((app, i) => (
+              <li key={app.id} className={`flex flex-wrap items-center gap-3 py-3 ${i ? "border-t border-line-hair" : ""}`}>
+                <div className="mr-auto min-w-0">
+                  <div className="text-[15px]">{app.name}</div>
+                  <div className="mt-[2px] text-[13px] text-faint">{app.detail}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => disconnect(app.id)}
+                  disabled={pending}
+                  className="cursor-pointer text-[14px] text-danger"
+                >
+                  {revoking === app.id ? t.disconnecting : t.disconnect}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mb-3 text-[15px]">{t.keysTitle}</div>
 
       {fresh && (
         <div className="mb-6 rounded-card border border-clay/50 px-4 py-4">

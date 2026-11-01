@@ -6,8 +6,11 @@ import { remainingFree } from "../queries";
 import { CREDIT_COST_PER_MEDITATION, DURATIONS, LOCALES, PLAN } from "../config";
 import { APP_VERSION } from "../version";
 import { logEvent } from "../telemetry";
-import { authenticateApiKey, type ApiKeyRow } from "./api-keys";
-import { defineTool, ToolError, type McpServer } from "./protocol";
+import { authenticateApiKey, bearerToken } from "./api-keys";
+import { AuthFailure, defineTool, ToolError, type McpServer } from "./protocol";
+import { challengeFor, userFromAccessToken } from "./oauth-auth";
+import { isAccessToken } from "../oauth/core";
+import { siteUrl } from "../site";
 import { describeCatalog, loadCatalog } from "../meditations/catalog";
 import { fromParams, fromPrompt, fromScript, paramsSchema, promptSchema, scriptSchema, type ActionContext } from "../meditations/actions";
 import { loadMeditation, playerUrl, viewMeditation, waitForMeditation } from "../meditations/view";
@@ -22,9 +25,14 @@ import type { Meditation, User } from "../types";
  * suyo y devuelve siempre el link del reproductor.
  */
 
+/** Con qué se presentó: una llave creada en /perfil o un token OAuth. */
+export type Credential =
+  | { kind: "api_key"; name: string; prefix: string }
+  | { kind: "oauth"; client: string; grantId: string };
+
 export interface UserContext {
   user: User;
-  key: ApiKeyRow;
+  credential: Credential;
   origin: string;
   site: string;
 }
@@ -77,7 +85,10 @@ const getAccount = tool({
         locale: u.locale,
         visibility: u.prefs?.publish_by_default ? "public" : "private",
       },
-      key: { name: ctx.key.name, prefix: ctx.key.prefix },
+      connected_with:
+        ctx.credential.kind === "oauth"
+          ? { oauth: ctx.credential.client }
+          : { api_key: ctx.credential.name, prefix: ctx.credential.prefix },
       links: { library: `${ctx.site}/biblioteca`, profile: `${ctx.site}/perfil`, plans: `${ctx.site}/planes` },
     };
   },
@@ -224,23 +235,50 @@ export const userServer: McpServer<UserContext> = {
   instructions: INSTRUCTIONS,
   tools: [getAccount, listOptions, createWithParams, createWithScript, createFromPrompt, getMeditation, listMine, setVisibility],
   allowedOrigins: allowedOrigins(),
+  /**
+   * Dos credenciales: un access token OAuth emitido para este MCP (lo que usa
+   * claude.ai al "Conectar") o una llave `omt_` creada en /perfil (para
+   * clientes que no hablan OAuth).
+   */
   async authenticate(request) {
-    const auth = await authenticateApiKey(request);
-    if (!auth) return null;
+    const token = bearerToken(request);
+    if (!token) return null;
     const origin = new URL(request.url).origin;
+    const site = siteUrl(origin);
+
+    if (isAccessToken(token)) {
+      const auth = await userFromAccessToken(request, token, "user");
+      if (auth instanceof AuthFailure) return auth;
+      return {
+        user: auth.user,
+        credential: { kind: "oauth", client: auth.grant.client_name, grantId: auth.grant.id },
+        origin,
+        site,
+      };
+    }
+
+    const auth = await authenticateApiKey(request);
+    if (!auth) return new AuthFailure("invalid", "La llave no existe o fue revocada.");
     return {
       user: auth.user,
-      key: auth.key,
+      credential: { kind: "api_key", name: auth.key.name, prefix: auth.key.prefix },
       origin,
-      site: (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, ""),
+      site,
     };
   },
+  challenge: (request) => challengeFor(request, "user"),
   async onCall(info) {
     await logEvent({
       level: info.ok ? "info" : "warn",
       source: "mcp:user",
       message: `${info.tool} ${info.ok ? "ok" : "falló"}`,
-      data: { tool: info.tool, ms: info.ms, args: info.argKeys, error: info.error ?? null, key: info.ctx.key.prefix },
+      data: {
+        tool: info.tool,
+        ms: info.ms,
+        args: info.argKeys,
+        error: info.error ?? null,
+        credential: info.ctx.credential.kind === "oauth" ? `oauth:${info.ctx.credential.client}` : info.ctx.credential.prefix,
+      },
       trace: { userId: info.ctx.user.id, via: "mcp" },
     });
   },

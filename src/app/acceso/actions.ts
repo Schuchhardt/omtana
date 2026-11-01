@@ -7,6 +7,7 @@ import { createSession, hashPassword, verifyPassword } from "@/lib/auth";
 import { getLang } from "@/lib/lang";
 import { copy, type Copy } from "@/lib/i18n";
 import type { User } from "@/lib/types";
+import { safeNext } from "@/lib/safe-next";
 
 export interface AuthState {
   error?: string;
@@ -74,7 +75,8 @@ export async function signup(_prev: AuthState, form: FormData): Promise<AuthStat
   }
 
   await createSession(user.id);
-  redirect("/home");
+  // Si venía de conectar una app (OAuth), vuelve a la pantalla de permiso.
+  redirect(safeNext(form.get("next")) ?? "/home");
 }
 
 export async function login(_prev: AuthState, form: FormData): Promise<AuthState> {
@@ -99,5 +101,5 @@ export async function login(_prev: AuthState, form: FormData): Promise<AuthState
   }
 
   await createSession(row.id);
-  redirect("/home");
+  redirect(safeNext(form.get("next")) ?? "/home");
 }

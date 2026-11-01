@@ -74,6 +74,20 @@ const nextConfig: NextConfig = {
         source: "/sw.js",
         headers: [{ key: "Cache-Control", value: "no-cache, must-revalidate" }],
       },
+      {
+        /**
+         * La pantalla de consentimiento de OAuth no se puede embeber: si un
+         * sitio la metiera en un iframe invisible, podría hacer que alguien
+         * apretara "Permitir" sin saberlo (clickjacking).
+         */
+        source: "/oauth/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
     ];
   },
 };
