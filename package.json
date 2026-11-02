@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"tests/**/*.test.mts\"",
     "db:push": "tsx --conditions=react-server scripts/db-push.ts",
+    "db:migrate": "tsx --conditions=react-server scripts/db-migrate.ts",
     "seed": "tsx --conditions=react-server scripts/seed.ts",
     "voices:link": "tsx --conditions=react-server scripts/voices-link.ts",
     "samples": "tsx --conditions=react-server scripts/samples.ts",

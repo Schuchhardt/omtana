@@ -57,7 +57,8 @@ WebSocket nativo.
 
 | Comando | Qué hace |
 |---|---|
-| `npm run db:push` | Aplica `supabase/migrations/`. `-- --solo 0004` aplica solo esa (las migraciones no llevan registro, así que el directorio entero falla sobre una base viva). `-- --print` escupe el SQL para pegarlo en el editor de Supabase. |
+| `npm run db:migrate` | Aplica **solo las migraciones pendientes**, cada una en su transacción y anotada en `omtana_schema_migrations`. `-- --seco` dice qué aplicaría. Lo corre `migraciones.yml` al mergear a main. Ver "Migraciones". |
+| `npm run db:push` | Aplica `supabase/migrations/` sin mirar el registro. `-- --solo 0004` aplica solo esa; `-- --print` escupe el SQL para pegarlo en el editor de Supabase. Para casos puntuales: lo normal es `db:migrate`. |
 | `npm run seed` | Carga voces, intenciones, ejercicios de respiración y la música que encuentre en `assets/music/`. Idempotente. |
 | `npm run voices:link` | Muestra el estado del enlace con ElevenLabs. `-- --auto` asigna por orden; `-- aurora=<voice_id>` asigna una. |
 | `npm run samples` | Graba la muestra de 12 s de cada voz. `-- --all` las rehace todas. |
@@ -434,8 +435,8 @@ videos se generan igual y se suben a mano desde `out/video/`.
 
 ## Automatización
 
-Tres workflows en `.github/workflows/`, y los tres llaman a lo mismo que se
-puede correr a mano. Esa es la regla: **Actions no ejecuta nada que no ejecutes
+Cuatro workflows en `.github/workflows/` (más el de tests), y todos llaman a lo
+mismo que se puede correr a mano. Esa es la regla: **Actions no ejecuta nada que no ejecutes
 tú**, así que si allá falla y acá no, la diferencia está en los secretos o en el
 runner, no en lo que corre.
 
@@ -444,6 +445,7 @@ runner, no en lo que corre.
 | `meditaciones.yml` | martes y viernes | genera las sesiones que más falta hacen | `npm run ci -- meditaciones --cuantas 3` |
 | `videos.yml` | lunes | renderiza los tres formatos de la tanda semanal | `npm run ci -- videos --cuantos 3` |
 | `curaduria.yml` | domingos | investiga qué falta y abre un issue con las propuestas | `npm run curaduria -- --investigar` |
+| `migraciones.yml` | al mergear a main un cambio en `supabase/migrations/` | aplica las migraciones pendientes | `npm run db:migrate` |
 
 ```bash
 npm run ci -- meditaciones --seco    # imprime los comandos, no ejecuta ninguno
@@ -472,6 +474,45 @@ YouTube es una casilla que hay que marcar, y sube en privado.
 
 Las tandas llevan `concurrency` por nombre: dos corridas a la vez generarían la
 misma sesión dos veces, porque las dos verían el mismo hueco.
+
+### Migraciones
+
+Una migración nueva se aplica sola cuando su PR llega a main:
+`migraciones.yml` corre `npm run db:migrate`, que aplica solo lo que no está
+anotado en `omtana_schema_migrations`.
+
+- **Cada migración, entera o nada.** Corre en su propia transacción junto con
+  su registro: si falla, se revierte, no queda anotada y el job falla con el
+  error en el resumen de la corrida.
+- **Nunca dos veces.** Toma un candado de Postgres y, ya con él, vuelve a mirar
+  el registro: si dos corridas se cruzan, la segunda se salta lo que la
+  primera aplicó, aunque la migración no sea idempotente.
+- **El primer día** el registro no existe y la base de producción ya tiene
+  0001–0007: esas se anotan como *baseline* sin correrlas. Sobre una base
+  vacía no hay baseline y se aplican todas.
+- **Avisos**: un archivo que cambió después de aplicado no se re-aplica (se
+  avisa, porque editar una migración aplicada no cambia la base), y tampoco
+  pasa en silencio una anotada que ya no tiene archivo ni una que llega con un
+  número menor que la última.
+- Una migración que no puede ir en transacción (`create index concurrently`)
+  lo declara con `-- omtana:sin-transaccion` en el archivo.
+
+**Para activarlo** hay que configurar dos cosas en GitHub:
+
+1. El secreto `SUPABASE_DB_URL` con la URI del **Session pooler** (Supabase →
+   Connect → Session pooler). La conexión directa es solo IPv6 (salvo con el
+   add-on IPv4) y los runners de GitHub son solo IPv4; el Transaction pooler
+   (puerto 6543) es para tráfico corto de serverless, no para migraciones.
+2. El environment `produccion` (Settings → Environments) con *Required
+   reviewers*: cada corrida espera tu aprobación antes de tocar la base, que es
+   compartida con otras apps. Sin reviewers, corre directo.
+
+**Escribir migraciones que se aguanten el deploy.** Netlify despliega el mismo
+push en paralelo, así que el código nuevo puede llegar unos segundos antes que
+el esquema (o, si la corrida espera aprobación, bastante antes). Por eso: solo
+cosas aditivas (`create … if not exists`, `add column if not exists`), código
+que tolere que la columna todavía no esté, y lo destructivo (borrar o renombrar)
+en un PR posterior, cuando ya nada lo usa.
 
 ## Estructura
 
