@@ -2,9 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Preferences } from "./Preferences";
+import { McpKeys } from "./McpKeys";
 import { SiteFooter } from "@/components/SiteFooter";
 import { currentUser } from "@/lib/auth";
 import { listVoices, userStats } from "@/lib/queries";
+import { listApiKeys } from "@/lib/mcp/api-keys";
+import { listGrants } from "@/lib/oauth/store";
+import { siteUrl } from "@/lib/meditations/view";
+import { headers } from "next/headers";
 import { paymentsEnabled } from "@/lib/payments";
 import { formatLongDate } from "@/lib/format";
 import { getLang } from "@/lib/lang";
@@ -19,11 +24,19 @@ export default async function PerfilPage() {
   const user = await currentUser();
   if (!user) redirect("/acceso");
 
-  const [voices, stats, lang] = await Promise.all([
+  const [voices, stats, lang, keys, grants, requestHeaders] = await Promise.all([
     listVoices(),
     userStats(user.id),
     getLang(),
+    listApiKeys(user.id),
+    // Sin la migración 0009 la tabla no existe: la sección queda vacía.
+    listGrants(user.id).catch(() => []),
+    headers(),
   ]);
+
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
+  const proto = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const mcpEndpoint = `${siteUrl(`${proto}://${host}`)}/api/mcp`;
 
   const t = copy(lang).profile;
 
@@ -74,6 +87,29 @@ export default async function PerfilPage() {
           prefs={user.prefs}
           voices={voices}
           t={t}
+        />
+
+        <McpKeys
+          endpoint={mcpEndpoint}
+          t={t.mcp}
+          apps={grants.map((grant) => ({
+            id: grant.id,
+            name: grant.client_name,
+            detail:
+              fill(t.mcp.appDetail, { date: formatLongDate(grant.created_at, lang) }) +
+              (grant.resource.endsWith("/admin") ? ` · ${t.mcp.appAdmin}` : ""),
+          }))}
+          keys={keys.map((key) => ({
+            id: key.id,
+            name: key.name,
+            prefix: key.prefix,
+            revoked: !!key.revoked_at,
+            detail: key.revoked_at
+              ? t.mcp.revoked
+              : key.last_used_at
+                ? fill(t.mcp.lastUsed, { date: formatLongDate(key.last_used_at, lang) })
+                : t.mcp.neverUsed,
+          }))}
         />
       </div>
 

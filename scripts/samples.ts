@@ -9,6 +9,7 @@ import { log, requireEnv, parseArgs, fatal } from "./_bootstrap";
 import { db } from "../src/lib/supabase";
 import { ensureBucket, uploadAudio } from "../src/lib/storage";
 import { synthesize } from "../src/lib/generation/tts";
+import { withTrace } from "../src/lib/telemetry";
 import type { Voice } from "../src/lib/types";
 
 const LINES: Record<string, string> = {
@@ -43,11 +44,13 @@ async function main() {
     const line = LINES[voice.languages[0]] ?? LINES.es;
 
     try {
-    const mp3 = await synthesize({
-      voiceId: voice.provider_voice_id!,
-      text: line,
-      settings: voice.provider_settings,
-    });
+    const mp3 = await withTrace({ operation: "voces:muestra", via: "cli" }, () =>
+      synthesize({
+        voiceId: voice.provider_voice_id!,
+        text: line,
+        settings: voice.provider_settings,
+      }),
+    );
 
     const path = await uploadAudio(`samples/${voice.slug}.mp3`, mp3);
 

@@ -4,8 +4,9 @@ import { sectionMinutes, wordTarget } from "../session-plan";
 import { BECKWITH_LENS, HOUSE_STYLE, LANGUAGE } from "./style";
 import { SCRIPT_REFUSED } from "./errors";
 import { checkGrounding, type GroundingCheck } from "./grounding";
+import { recordAnthropicUsage } from "../telemetry";
 
-const MODEL = "claude-opus-5";
+export const MODEL = "claude-opus-5";
 
 /** Lo que suena alrededor del tramo: los bloques de la plantilla, ya grabados. */
 export interface SurroundingBlock {
@@ -104,7 +105,9 @@ const outputSchema = {
 
 type CreateMessage = (
   params: Anthropic.MessageCreateParamsNonStreaming,
-) => Promise<Pick<Anthropic.Message, "content" | "stop_reason">>;
+) => Promise<
+  Pick<Anthropic.Message, "content" | "stop_reason"> & Partial<Pick<Anthropic.Message, "model" | "usage">>
+>;
 
 /** Lo que se le pide al modelo. Exportado para que los tests vean el prompt entero. */
 export function buildPrompt(req: ScriptRequest, feedback: string[] = []): string {
@@ -168,6 +171,7 @@ export async function writeScript(
   let last: ScriptResult | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const startedAt = Date.now();
     const response = await create({
       model: MODEL,
       max_tokens: 8000,
@@ -178,6 +182,16 @@ export async function writeScript(
         format: { type: "json_schema", schema: outputSchema },
       },
       messages: [{ role: "user", content: buildPrompt(req, feedback) }],
+    });
+
+    // Cada intento se registra (también el reintento por grounding y una
+    // negativa): todos se cobran.
+    await recordAnthropicUsage({
+      operation: attempt > 1 ? "guion:reintento" : "guion",
+      requestedModel: MODEL,
+      response,
+      startedAt,
+      metadata: { attempt },
     });
 
     if (response.stop_reason === "refusal") {

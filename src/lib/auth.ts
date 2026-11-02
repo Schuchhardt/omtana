@@ -107,7 +107,7 @@ export class AuthError extends Error {
  * El cupo del plan Free es mensual. En vez de un cron, el contador se reinicia
  * la primera vez que el usuario aparece dentro de un mes nuevo.
  */
-async function rollPeriod(user: User): Promise<User> {
+export async function rollPeriod(user: User): Promise<User> {
   const currentPeriod = new Date();
   currentPeriod.setUTCDate(1);
   const period = currentPeriod.toISOString().slice(0, 10);

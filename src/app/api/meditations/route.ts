@@ -1,14 +1,7 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/lib/supabase";
 import { currentUser } from "@/lib/auth";
-import { remainingFree } from "@/lib/queries";
-import { paymentsEnabled } from "@/lib/payments";
-import { runGenerationJob } from "@/lib/generation/pipeline";
-import { dispatchToBackground, generationRunner } from "@/lib/generation/dispatch";
-import { failGeneration } from "@/lib/generation/jobs";
-import { CREDIT_COST_PER_MEDITATION, PLAN } from "@/lib/config";
-import { breathingSlotSeconds } from "@/lib/breathing";
+import { createMeditation } from "@/lib/meditations/create";
 import { getLang } from "@/lib/lang";
 import { copy } from "@/lib/i18n";
 
@@ -43,123 +36,29 @@ export async function POST(request: Request) {
   }
   const input = parsed.data;
 
-  // Pro no descuenta nada; Free gasta primero el cupo del mes y después
-  // créditos. Sin pagos configurados no se descuenta nada a nadie.
-  const billing = paymentsEnabled();
-  const free = remainingFree(user);
-  const usesFree = billing && user.plan !== "pro" && free > 0;
-  const usesCredit = billing && user.plan !== "pro" && !usesFree;
-
-  if (usesCredit && user.credits < CREDIT_COST_PER_MEDITATION) {
-    return NextResponse.json(
-      { error: t.outOfCredits },
-      { status: 402 },
-    );
-  }
-
-  const intentionId = input.intentionSlug
-    ? ((
-        await db()
-          .from("omtana_intentions")
-          .select("id")
-          .eq("slug", input.intentionSlug)
-          .maybeSingle()
-      ).data?.id ?? null)
-    : null;
-
-  const { data: meditation, error } = await db()
-    .from("omtana_meditations")
-    .insert({
-      user_id: user.id,
-      intention_id: intentionId,
-      voice_id: input.voiceId,
-      // La música ya no se mezcla dentro del audio: el reproductor la pone en
-      // vivo, con su propio volumen, sobre la sesión ya generada.
-      music_track_id: null,
-      breathing_exercise_id: input.breathingExerciseId ?? null,
-      breathing_slot_seconds: breathingSlotSeconds(input.durationMinutes),
-      title: input.intention.slice(0, 90),
-      intention_text: input.intention,
-      context_text: input.context,
+  // El cobro, el job y el despacho viven en lib/meditations/create.ts: los
+  // comparte con los MCP para que generen igual que la web.
+  const result = await createMeditation({
+    user,
+    origin: new URL(request.url).origin,
+    via: "web",
+    meditation: {
+      intention: input.intention,
+      intentionSlug: input.intentionSlug,
+      context: input.context,
+      durationMinutes: input.durationMinutes,
       locale: input.locale,
-      duration_seconds: input.durationMinutes * 60,
-      source: "user",
+      voiceId: input.voiceId,
+      breathingExerciseId: input.breathingExerciseId,
       visibility: input.visibility,
-      status: "pending",
-    })
-    .select("id")
-    .single();
+    },
+  });
 
-  if (error || !meditation) {
-    return NextResponse.json({ error: t.meditationCreateFailed }, { status: 500 });
+  if (!result.ok) {
+    return result.code === "out_of_credits"
+      ? NextResponse.json({ error: t.outOfCredits }, { status: 402 })
+      : NextResponse.json({ error: t.meditationCreateFailed }, { status: 500 });
   }
 
-  // Se cobra al encolar. Si la generación falla, /status devuelve el crédito.
-  if (usesFree) {
-    await db()
-      .from("omtana_users")
-      .update({ free_used_period: user.free_used_period + 1 })
-      .eq("id", user.id);
-    await db().from("omtana_credit_ledger").insert({
-      user_id: user.id,
-      delta: -1,
-      reason: `Personalización incluida en ${PLAN.free.tag}`,
-      reason_key: "free_included",
-      meditation_id: meditation.id,
-    });
-  } else if (usesCredit) {
-    await db()
-      .from("omtana_users")
-      .update({ credits: user.credits - CREDIT_COST_PER_MEDITATION })
-      .eq("id", user.id);
-    await db().from("omtana_credit_ledger").insert({
-      user_id: user.id,
-      delta: -CREDIT_COST_PER_MEDITATION,
-      reason: input.intention.slice(0, 90),
-      reason_key: "meditation",
-      reason_meta: { title: input.intention.slice(0, 90) },
-      meditation_id: meditation.id,
-    });
-  }
-
-  const { data: job, error: jobError } = await db()
-    .from("omtana_generation_jobs")
-    .insert({ meditation_id: meditation.id, status: "queued" })
-    .select("id")
-    .single();
-
-  if (!job) {
-    // Sin job nadie la iba a generar y la sesión quedaba "pendiente" para
-    // siempre, con lo cobrado adentro. Fallida, /status devuelve el crédito.
-    await failGeneration({
-      meditationId: meditation.id,
-      jobId: null,
-      error: `No se pudo crear el job de generación: ${jobError?.message ?? "sin detalle"}`,
-    });
-    return NextResponse.json({ id: meditation.id }, { status: 201 });
-  }
-
-  if (generationRunner() === "background") {
-    // Producción: una función en segundo plano con 15 minutos y ffmpeg. Acá
-    // solo se encarga; el reproductor consulta /status mientras tanto.
-    const sent = await dispatchToBackground({
-      origin: new URL(request.url).origin,
-      meditationId: meditation.id,
-      jobId: job.id,
-    });
-    if (!sent.ok) {
-      await failGeneration({ meditationId: meditation.id, jobId: job.id, error: sent.reason });
-    }
-  } else {
-    // Local: en el mismo proceso, después de responder.
-    after(async () => {
-      try {
-        await runGenerationJob(meditation.id, job.id);
-      } catch (err) {
-        console.error(`[omtana] generación ${meditation.id} falló:`, err);
-      }
-    });
-  }
-
-  return NextResponse.json({ id: meditation.id }, { status: 201 });
+  return NextResponse.json({ id: result.id }, { status: 201 });
 }

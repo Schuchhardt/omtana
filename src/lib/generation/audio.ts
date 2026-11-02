@@ -253,10 +253,13 @@ async function padToTarget(
   destination: string,
   spoken: number,
   target: number,
+  opts: { spread?: boolean } = {},
 ): Promise<void> {
   const deficit = target - spoken;
   const pauses =
-    deficit > DISTRIBUTE_OVER_SECONDS ? await probePauses(source, spoken) : [];
+    (opts.spread ?? true) && deficit > DISTRIBUTE_OVER_SECONDS
+      ? await probePauses(source, spoken)
+      : [];
 
   // Sin pausas donde repartir (tramo corto o voz corrida): la cola es lo que hay.
   if (pauses.length === 0) {
@@ -307,6 +310,13 @@ export interface SegmentInput {
   audio: Buffer;
   /** Duración objetivo en segundos; se rellena con silencio hasta llegar. */
   targetSeconds: number;
+  /**
+   * En vez de un objetivo, un silencio fijo después de la voz, sin repartirlo
+   * por las pausas internas. Es lo que pide un guion propio: "[pausa 10]"
+   * quiere decir diez segundos ahí, no diez segundos esparcidos por el párrafo.
+   * Si está, `targetSeconds` no se usa.
+   */
+  trailingSilenceSeconds?: number;
 }
 
 export interface AssembledSegment {
@@ -352,7 +362,12 @@ export async function assemble(
       const spoken = await durationOf(raw);
 
       // Mono 44.1k para que el concat no tenga que renegociar formatos.
-      await padToTarget(raw, fixed, spoken, seg.targetSeconds);
+      if (seg.trailingSilenceSeconds !== undefined) {
+        const silence = Math.max(0, seg.trailingSilenceSeconds);
+        await padToTarget(raw, fixed, spoken, spoken + silence, { spread: false });
+      } else {
+        await padToTarget(raw, fixed, spoken, seg.targetSeconds);
+      }
 
       // Se mide el resultado en vez de suponerlo: las pausas repartidas mueven
       // los offsets, y de ahí salen las fases y las palabras del reproductor.

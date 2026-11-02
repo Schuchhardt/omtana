@@ -13,26 +13,30 @@ export function AuthForm({
   mode,
   t,
   lang,
+  next = null,
 }: {
   mode: "crear" | "entrar";
   t: Copy["access"];
   lang: UiLang;
+  /** A dónde volver después de entrar (p. ej. la pantalla de permiso de OAuth). */
+  next?: string | null;
 }) {
   const isSignup = mode === "crear";
+  const keep = next ? `next=${encodeURIComponent(next)}` : "";
   const [state, action, pending] = useActionState(isSignup ? signup : login, EMPTY);
 
   return (
     <div>
       <div className="mb-[34px] flex w-fit gap-1 rounded-full bg-line-hair p-1">
         <Link
-          href={localePath(lang, "/acceso")}
+          href={localePath(lang, keep ? `/acceso?${keep}` : "/acceso")}
           data-active={!isSignup}
           className="om-pill border-transparent data-[active=true]:border-ink"
         >
           {t.tabSignIn}
         </Link>
         <Link
-          href={localePath(lang, "/acceso?modo=crear")}
+          href={localePath(lang, `/acceso?modo=crear${keep ? `&${keep}` : ""}`)}
           data-active={isSignup}
           className="om-pill border-transparent data-[active=true]:border-ink"
         >
@@ -48,6 +52,7 @@ export function AuthForm({
       </p>
 
       <form action={action} className="flex max-w-[420px] flex-col gap-4">
+        {next && <input type="hidden" name="next" value={next} />}
         {isSignup && (
           <div>
             <label htmlFor="name" className="mb-2 block text-[14px] text-muted">

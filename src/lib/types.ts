@@ -95,7 +95,27 @@ export interface Meditation {
   plays: number;
   created_at: string;
   ready_at: string | null;
+  /**
+   * Quién escribió el guion. null: el modelo. 'tramo': la persona trajo el
+   * tramo personalizado. 'completo': la meditación entera es su texto.
+   */
+  script_mode?: ScriptMode | null;
+  script_override?: string | null;
+  /** Por dónde se pidió: web, mcp, admin. El CLI no la llena (ver `channelOf`). */
+  created_via?: string;
 }
+
+/**
+ * Por dónde entró una meditación. La columna vale 'web' por defecto, y el CLI
+ * no la llena (así sus tandas no dependen de la migración 0008): una fila con
+ * 'web' y sin dueño es del CLI, porque la web siempre tiene a alguien detrás.
+ */
+export function channelOf(m: { created_via?: string | null; user_id: string | null }): string {
+  if (m.created_via && m.created_via !== "web") return m.created_via;
+  return m.user_id ? "web" : "cli";
+}
+
+export type ScriptMode = "tramo" | "completo";
 
 export interface MeditationSegment {
   id: string;

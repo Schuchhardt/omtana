@@ -473,6 +473,146 @@ YouTube es una casilla que hay que marcar, y sube en privado.
 Las tandas llevan `concurrency` por nombre: dos corridas a la vez generarían la
 misma sesión dos veces, porque las dos verían el mismo hueco.
 
+## MCP: asistentes
+
+Dos servidores [MCP](https://modelcontextprotocol.io) para que Claude (o cualquier
+cliente MCP) use Omtana, con **OAuth**: en claude.ai se agregan como conector con
+la URL y un botón "Conectar", sin copiar llaves.
+
+Los dos son **Streamable HTTP sin estado**, porque corren en la función de
+Netlify, que nace y muere en cada petición. Hablan las dos eras del protocolo:
+la **2026-07-28** (sin `initialize`, versión en `_meta`, `server/discover`,
+cabeceras `Mcp-Method`/`Mcp-Name`) y la **2025-11-25 y anteriores** (con
+`initialize`), que es la que siguen usando la mayoría de los clientes y el SDK
+oficial. El protocolo está escrito a mano en `src/lib/mcp/protocol.ts`, con zod
+para validar y para el JSON Schema de cada herramienta, y se prueba contra el
+cliente oficial del SDK.
+
+| Servidor | URL | Credencial |
+|---|---|---|
+| Personas | `/api/mcp` | OAuth (scope `meditations`), o una llave `omt_…` creada en **/perfil → Asistentes (MCP)** para clientes sin OAuth |
+| Admin | `/api/mcp/admin` | OAuth (scope `admin`) para los emails de `OMTANA_ADMIN_EMAILS`, o `Bearer $OMTANA_ADMIN_MCP_TOKEN` |
+
+Necesita las migraciones `0008` (llaves, uso y costos, bitácora, guion propio) y
+`0009` (OAuth): `npm run db:push -- --solo 0008` y `-- --solo 0009`.
+
+### El de las personas
+
+Hace lo que hace la web, con la misma cuenta y el mismo cobro (cupo Free del
+mes o un crédito; si falla, se devuelve). Toda creación devuelve el
+`player_url`.
+
+| Herramienta | Qué hace |
+|---|---|
+| `get_account` | Plan, cupo, créditos, valores por defecto |
+| `list_options` | Voces, intenciones, respiración (con qué voces está grabada) y música |
+| `create_meditation` | **Con parámetros**: intención, contexto, duración, voz, respiración, música, idioma |
+| `create_meditation_from_script` | **Con guion propio**. `completo`: la sesión entera es el texto; `tramo`: el texto reemplaza el tramo personalizado de una plantilla. `[pausa 10]` deja diez segundos de silencio |
+| `generate_from_prompt` | **Desde un pedido libre**: Claude elige los parámetros del catálogo y la crea. `dry_run` muestra la propuesta sin cobrar |
+| `get_meditation` | Estado, `player_url` y `audio_url` (MP3 firmado, 3 h). `wait_seconds` espera hasta 45 s |
+| `list_my_meditations`, `set_visibility` | Lo suyo |
+
+**Música**: `music` la hornea en el MP3 (sirve para descargar el audio y
+llevárselo). Sin `music`, el audio va seco y el reproductor ofrece el banco en
+vivo, como siempre.
+
+Límites por persona: tres sesiones generándose a la vez y treinta pedidos
+libres por hora. El texto de los argumentos nunca se guarda en la bitácora:
+solo el nombre de la herramienta, cuánto tardó y los nombres de los campos.
+
+### El de administración
+
+Todo lo anterior para cualquier cuenta o para el catálogo (`for_user`; no cobra
+salvo `charge: true`), más la vista de la plataforma:
+
+| Herramienta | Qué hace |
+|---|---|
+| `get_overview` | Personas, sesiones por estado y canal (web/mcp/admin), tasa de falla, colgados, escuchas, créditos, costos |
+| `get_architecture` | Flujo, componentes, modelos por paso, precios, variables (solo si están), límites, filas por tabla |
+| `check_generation_health` | La mezcla de prueba, en la función que genera |
+| `get_costs` | **Traza de tokens y costos** por día, modelo, operación, canal o persona; costo medio por sesión y por duración; plantillas; las más caras |
+| `get_meditation_trace` | Una sesión paso a paso: cuánto tardó cada paso y cada llamada al modelo y a la voz con sus tokens, caracteres y costo |
+| `list_errors`, `list_logs`, `list_jobs` | Fallas agrupadas por patrón, colgados, bitácora con filtros |
+| `retry_generation`, `reap_stale_jobs` | Reintentar una fallida, barrer colgados |
+| `search_users`, `get_user`, `list_meditations`, `get_meditation`, `revoke_api_key`, `get_curation_report` | Personas, sesiones, llaves, curaduría |
+
+### Conectarlo
+
+**claude.ai / Claude Desktop**: Configuración → Conectores → *Agregar conector
+personalizado* → `https://omtana.com/api/mcp` (o `/api/mcp/admin`) → Conectar.
+Se abre Omtana, la persona inicia sesión, ve qué va a poder hacer la app y a
+dónde vuelve, y aprueba.
+
+```bash
+# Claude Code: hace OAuth solo la primera vez que se usa (/mcp para autenticar)
+claude mcp add --transport http omtana https://omtana.com/api/mcp
+
+# o con llave / token fijo, para scripts y clientes sin OAuth
+claude mcp add --transport http omtana https://omtana.com/api/mcp \
+  --header "Authorization: Bearer omt_…"
+claude mcp add --transport http omtana-admin https://omtana.com/api/mcp/admin \
+  --header "Authorization: Bearer $OMTANA_ADMIN_MCP_TOKEN"
+```
+
+Con la API de Mensajes, el conector MCP recibe un token (OAuth o llave) en
+`authorization_token`. Las apps conectadas se ven y se desconectan en /perfil.
+
+### OAuth
+
+Omtana es su propio servidor de autorización OAuth 2.1 (`src/lib/oauth/`),
+según la especificación de autorización MCP 2026-07-28:
+
+| Pieza | Dónde |
+|---|---|
+| Metadata del recurso (RFC 9728) | `/.well-known/oauth-protected-resource/api/mcp` y `…/api/mcp/admin`; el 401 de cada MCP la anuncia en `WWW-Authenticate` con su `scope` |
+| Metadata del servidor (RFC 8414) | `/.well-known/oauth-authorization-server` |
+| Consentimiento | `/oauth/authorize`: pide sesión (vuelve de `/acceso` con `next`), muestra la app, a qué host vuelve (advierte si es `localhost`) y qué podrá hacer; no se puede embeber en un iframe |
+| Token | `/api/oauth/token`: código con **PKCE S256 obligatorio**, de un solo uso y 10 minutos; access token de 1 hora; refresh token de 60 días que **rota en cada uso** |
+| Registro | **Client ID Metadata Documents** (el `client_id` es la URL de su documento; lo recomendado) y registro dinámico `/api/oauth/register` (RFC 7591, deprecado pero lo que usan muchos clientes; 20 por hora por IP) |
+| Revocación | `/api/oauth/revoke` (RFC 7009) y "Desconectar" en /perfil |
+
+Las decisiones de seguridad que vale la pena saber:
+
+- **Audiencia (RFC 8707).** Cada token sirve para un solo MCP: uno emitido para
+  `/api/mcp` no abre `/api/mcp/admin`. Se valida en cada petición.
+- **Admin por email.** Solo quien está en `OMTANA_ADMIN_EMAILS` puede aprobar
+  el MCP de admin, y la lista se vuelve a mirar en cada petición: sacar a
+  alguien le corta el acceso al tiro (403 `insufficient_scope`).
+- **Reuso = robo.** Un código o un refresh token que aparece dos veces revoca
+  el permiso entero.
+- **`iss` en la vuelta** (RFC 9207) contra ataques de mezcla de servidores.
+- **Redirect URIs exactos**, solo https o loopback (en loopback se acepta
+  cualquier puerto, RFC 8252). Un error antes de validar el redirect se muestra
+  en Omtana, nunca se redirige: no es un redirector abierto.
+- **SSRF.** Para leer un Client ID Metadata Document: solo https y dominios
+  (nada de IPs), sin redirecciones, 5 s y 64 KB de tope, y la IP se valida en
+  la conexión misma (contra DNS rebinding): loopback, redes privadas,
+  link-local y metadata de la nube quedan fuera.
+- Igual que sesiones y llaves, de cada código y token se guarda el sha256.
+
+`tests/oauth-sdk.test.mts` levanta un servidor con los mismos handlers y hace
+que el cliente oficial del SDK de MCP recorra el flujo completo: 401 →
+descubrimiento → registro → autorización con PKCE y `resource` → canje → MCP →
+refresh con rotación → reuso detectado.
+
+### Costos y trazas
+
+Cada llamada a un proveedor deja una fila en `omtana_usage_events`: tokens de
+entrada, salida, razonamiento y caché que informó Anthropic, o caracteres de
+ElevenLabs, y el costo estimado en USD, colgada de la meditación, el job, la
+plantilla y la persona (`src/lib/telemetry.ts`, con `AsyncLocalStorage`: el
+motor no pasa ids de mano en mano). Cada paso de la generación, cada aviso al
+equipo y cada llamada MCP quedan en `omtana_logs` con su hora, que es de donde
+sale la línea de tiempo de `get_meditation_trace`.
+
+El costo es una **estimación** con la lista de precios pública
+(`src/lib/pricing.ts`, con fecha): no conoce descuentos ni el plan de
+ElevenLabs, que se fija con `ELEVENLABS_USD_PER_1K_CHARS`. Por eso se guarda
+también lo medido: si un precio cambia, se recalcula sobre los tokens. Un
+modelo que no está en la tabla queda con costo nulo, no en cero. Las llamadas
+del CLI (respiración, muestras de voz, presentación de video, curaduría) también
+quedan registradas, con su operación.
+
 ## Estructura
 
 ```
@@ -487,8 +627,26 @@ src/
   lib/
     supabase.ts           cliente único con service role (marcado server-only)
     supabase-client.ts    el mismo cliente sin la marca, para netlify/functions
-    alerts.ts             avisos al equipo: webhook (Slack/Discord) y correo
+    alerts.ts             avisos al equipo: webhook (Slack/Discord), correo y bitácora
     auth.ts               sesiones propias, scrypt, cupo mensual
+    telemetry.ts          trazas: uso y costo por llamada, bitácora (AsyncLocalStorage)
+    pricing.ts            precios por modelo y por caracter, con fecha
+    oauth/
+      core.ts             OAuth 2.1: metadata, PKCE, códigos, tokens, audiencia
+      handlers.ts         endpoints como Request → Response, con el store inyectado
+      cimd.ts             Client ID Metadata Documents, con protección SSRF
+      store.ts            el store sobre Supabase
+    mcp/
+      protocol.ts         MCP Streamable HTTP sin estado, eras 2026-07-28 y legada
+      user-server.ts      herramientas de /api/mcp
+      admin-server.ts     herramientas de /api/mcp/admin
+      api-keys.ts         llaves omt_ por persona (solo el hash en la base)
+    meditations/
+      create.ts           crear, cobrar y encargar: lo comparten la web y los MCP
+      actions.ts          con parámetros, con guion propio, desde un pedido libre
+      interpret.ts        pedido libre → parámetros del catálogo, con Claude
+      refund.ts           devolver lo cobrado por una generación fallida
+    admin/reports.ts      resumen, costos, trazas, errores, arquitectura
     session-plan.ts       el reparto plantilla/tramos — lo usan app y scripts
     generation/
       template.ts         escribe y cachea los bloques fijos
@@ -496,6 +654,7 @@ src/
       tts.ts              ElevenLabs
       audio.ts            mezcla con ffmpeg (y dónde encontrarlo)
       pipeline.ts         orquesta y persiste
+      custom-script.ts    guiones propios: bloques y "[pausa N]"
       dispatch.ts         en qué función corre y el encargo firmado
       jobs.ts             tomar un job, registrar fallas, barrer colgados
       health.ts           ¿este entorno puede generar? mezcla de prueba
@@ -533,8 +692,10 @@ llave se filtrara.
 firmadas de tres horas.
 
 **Se cobra al encolar, se devuelve si falla.** Al generar se descuenta el cupo
-del mes o un crédito; si la generación falla, el primer `/status` que vea el
-error devuelve el crédito y lo deja anotado en el libro de movimientos.
+del mes o un crédito; si la generación falla, el primer `/status` (o
+`get_meditation` del MCP) que vea el error devuelve lo cobrado y lo deja
+anotado en el libro de movimientos. Solo se devuelve lo que de verdad se cobró:
+una sesión de Pro fallida no suma un crédito.
 
 **El cupo mensual no necesita cron.** Se reinicia solo la primera vez que el
 usuario aparece dentro de un mes nuevo.
